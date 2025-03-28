@@ -1,3 +1,3 @@
 
 
-turtle.forward()
+turtle.attack()
