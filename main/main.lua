@@ -28,11 +28,6 @@ MiningOrder = {
         y = 253,
         z = 1,
     },
-    METHOD = {
-        "x",
-        "z",
-        "y"
-    },
     DIMENSIONS = {
         x = 5,
         y = 5,
@@ -62,156 +57,23 @@ end
 We are ok to mine if we are within 1 block of our mineable block in any direction and have fuel and inventory space
 ]]--
 function OkToMine()
-    if NextMiningBlock == nil then
-        return false
-    end
     return HaveEnoughFuel() and HaveInventorySpace()
 end
 
---[[
-Resumable mining function
-]]--
-function Mine()
-    local mining_plane = false
-    while OkToMine() do
-        -- if were above our block
-        if Position.y - 1 == NextMiningBlock.y and Position.x == NextMiningBlock.x and Position.z == NextMiningBlock.z then
-            if Position.y == 1 then
-                NextMiningBlock = nil
-                return
-            end
-            turtle.digDown()
-            MoveDown()
-            NextMiningBlock.z = NextMiningBlock.z + 1
-            mining_plane = true
-        elseif mining_plane then
-            turtle.dig()
-            MoveForward()
-            if Position.x >= 16 and Position.z <= 1 then
-                mining_plane = false
-                NextMiningBlock.x = 1
-                NextMiningBlock.z = 1
-                NextMiningBlock.y = Position.y - 1
-            elseif Position.direction == "n" and Position.z >= 16 then
-                TurnRight()
-                NextMiningBlock.x = NextMiningBlock.x + 1
-            elseif Position.direction == "s" and Position.z <= 1 then
-                TurnLeft()
-                NextMiningBlock.x = NextMiningBlock.x + 1
-            elseif Position.direction == "e" and Position.z >= 16 then
-                TurnRight()
-                NextMiningBlock.z = NextMiningBlock.z - 1
-            elseif Position.direction == "e" and Position.z <= 1 then
-                TurnLeft()
-                NextMiningBlock.z = NextMiningBlock.z + 1
-            elseif Position.direction == "n" then
-                NextMiningBlock.z = NextMiningBlock.z + 1
-            elseif Position.direction == "s" then
-                NextMiningBlock.z = NextMiningBlock.z - 1
-            end
-        else
-            -- go to starting point of next plane
-            if Position.direction == "s" then
-                TurnRight()
-                MoveForward()
-            elseif Position.x > 1 then
-                MoveForward()
-            end
-            if Position.x <= 1 then
-                TurnRight()
-            end
-        end
-    end
-end
 
 --[[
 Resumable mining function
 ]]--
 function MineV2()
     assert(Position.x == MiningOrder.START.x and Position.y == MiningOrder.START.y and Position.z == MiningOrder.START.z, "Not at starting mine position ", DebugGlobals())
-    if (MiningOrder.DIMENSIONS.x == 0 or MiningOrder.DIMENSIONS.y == 0 or MiningOrder.DIMENSIONS.z == 0) then
+    if (MiningOrder.DIMENSIONS.x <= 0 or MiningOrder.DIMENSIONS.y <= 0 or MiningOrder.DIMENSIONS.z <= 0) then
         return -- nothing to do
     end
-
-    -- if we arent next to our next mining block, go to above the next mining block
-    local next_mining_block = GetPoint(MiningOrder.START, MiningOrder.RelativeNextMiningBlock)
-    local point_above_next_mining_block = GetPoint(next_mining_block, {x = 0, y = 1, z = 0})
-    while OkToMine() do
-        MoveTowardsPoint(point_above_next_mining_block, {"x", "z", "y"})
-    end
-    -- mine
-    local i = 0
-    while OkToMine() and i < 10 do
-        i = i + 1
-        print("getting mining block")
-        next_mining_block = GetPoint(MiningOrder.START, MiningOrder.RelativeNextMiningBlock)
-        print("NextMiningBlock", next_mining_block.x, next_mining_block.y, next_mining_block.z)
-        MineBlock()
-        print("MinedBlock")
-        MoveTowardsPoint(next_mining_block, MiningOrder.METHOD)
-        UpdateRelativeNextMiningBlock()
-    end
-end
-
-function UpdateRelativeNextMiningBlock()
-    local encoded_block = (MiningOrder.RelativeNextMiningBlock["y"] - 1) * MiningOrder.DIMENSIONS["z"] * MiningOrder.DIMENSIONS["x"]
-    if MiningOrder.RelativeNextMiningBlock["y"] % 2 == 0 then
-        encoded_block = encoded_block + (MiningOrder.DIMENSIONS["z"] - MiningOrder.RelativeNextMiningBlock["z"]) * MiningOrder.DIMENSIONS["x"]
-    else
-        encoded_block = encoded_block + (MiningOrder.RelativeNextMiningBlock["z"] - 1) * MiningOrder.DIMENSIONS["x"]
-    end
-    if MiningOrder.RelativeNextMiningBlock["z"] % 2 == 0 then
-        encoded_block = encoded_block + (MiningOrder.DIMENSIONS["x"] - MiningOrder.RelativeNextMiningBlock["x"])
-    else
-        encoded_block = encoded_block + (MiningOrder.RelativeNextMiningBlock["x"] - 1)
-    end
-
-    local can_move_x = encoded_block % MiningOrder.DIMENSIONS["x"] ~= 0
-    local can_move_z = encoded_block % (MiningOrder.DIMENSIONS["x"] * MiningOrder.DIMENSIONS["z"]) ~= 0
-    local can_move_y = encoded_block % (MiningOrder.DIMENSIONS["x"] * MiningOrder.DIMENSIONS["z"] * MiningOrder.DIMENSIONS["y"]) ~= 0
-    if can_move_x then
-        if MiningOrder.RelativeNextMiningBlock.z % 2 == 0 then
-            if MiningOrder.RelativeNextMiningBlock.y % 2 == 0 then
-                MiningOrder.RelativeNextMiningBlock.x = MiningOrder.RelativeNextMiningBlock.x + 1
-            else
-                MiningOrder.RelativeNextMiningBlock.x = MiningOrder.RelativeNextMiningBlock.x - 1
-            end
-        else
-            if MiningOrder.RelativeNextMiningBlock.y % 2 == 0 then
-                MiningOrder.RelativeNextMiningBlock.x = MiningOrder.RelativeNextMiningBlock.x - 1
-            else
-                MiningOrder.RelativeNextMiningBlock.x = MiningOrder.RelativeNextMiningBlock.x + 1
-            end
-        end
-        return
-    end
-    if can_move_z then
-        if MiningOrder.RelativeNextMiningBlock.y % 2 == 0 then
-            MiningOrder.RelativeNextMiningBlock.x = MiningOrder.RelativeNextMiningBlock.x - 1
-        else
-            MiningOrder.RelativeNextMiningBlock.x = MiningOrder.RelativeNextMiningBlock.x + 1
-        end
-    end
-    if can_move_y then
-        MiningOrder.RelativeNextMiningBlock.y = MiningOrder.RelativeNextMiningBlock - 1
-    end
-    MiningOrder.RelativeNextMiningBlock = nil
+    
 end
 
 
-function MineBlock()
-    local next_mining_block = GetPoint(MiningOrder.START, MiningOrder.RelativeNextMiningBlock)
-    FaceBlock(next_mining_block, {"x", "z", "y"})
-    local dist_x = math.abs(Position.x - next_mining_block.x)
-    local dist_y = math.abs(Position.y - next_mining_block.y)
-    local dist_z = math.abs(Position.z - next_mining_block.z)
-    assert(dist_x + dist_y + dist_z == 1, "Not close enough to block", dist_x, dist_y, dist_z, DebugGlobals())
-    if dist_y == 1 then
-        turtle.digDown()
-    else
-        turtle.dig()
-    end
-end
+
 
 
 function DebugGlobals()
@@ -476,5 +338,3 @@ function HaveInventorySpace()
     return false
 end
 
-
-Main()
