@@ -59,12 +59,16 @@ function Mine()
             elseif Position.direction == "s" and Position.z <= 1 then
                 TurnLeft()
                 NextMiningBlock.x = NextMiningBlock.x + 1
-            elseif Position.direction == "e" then
+            elseif Position.direction == "e" and Position.z >= 16 then
                 TurnRight()
                 NextMiningBlock.z = NextMiningBlock.z - 1
-            elseif Position.direction == "w" then
+            elseif Position.direction == "e" and Position.z <= 1 then
                 TurnLeft()
                 NextMiningBlock.z = NextMiningBlock.z + 1
+            elseif Position.direction == "n" then
+                NextMiningBlock.z = NextMiningBlock.z + 1
+            elseif Position.direction == "s" then
+                NextMiningBlock.z = NextMiningBlock.z - 1
             end
         else
             -- go to starting point of next plane
@@ -154,12 +158,10 @@ end
 
 
 function HaveInventorySpace()
-    for i = 1, 16, 1 do
-        turtle.select(i)
-        if turtle.getItemSpace() == 64 then
-            turtle.select(1)
-            return true
-        end
+    turtle.select(16)
+    if turtle.getItemSpace() == 64 then
+        turtle.select(1)
+        return true
     end
 end
 
