@@ -89,32 +89,33 @@ function Mine()
             end
             turtle.digDown()
             MoveDown()
-            NextMiningBlock.z = NextMiningBlock.z + 1
+            NextMiningBlock.x = NextMiningBlock.x + 1
+            Orient("e")
             mining_plane = true
         elseif mining_plane then
             turtle.dig()
             MoveForward()
-            if Position.x >= 16 and Position.z <= 1 then
+            if Position.z >= 16 and Position.x <= 1 then
                 mining_plane = false
                 NextMiningBlock.x = 1
                 NextMiningBlock.z = 1
                 NextMiningBlock.y = Position.y - 1
-            elseif Position.direction == "n" and Position.z >= 16 then
+            elseif Position.direction == "e" and Position.x >= 16 then
                 TurnRight()
-                NextMiningBlock.x = NextMiningBlock.x + 1
-            elseif Position.direction == "s" and Position.z <= 1 then
-                TurnLeft()
-                NextMiningBlock.x = NextMiningBlock.x + 1
-            elseif Position.direction == "e" and Position.z >= 16 then
-                TurnRight()
-                NextMiningBlock.z = NextMiningBlock.z - 1
-            elseif Position.direction == "e" and Position.z <= 1 then
+                NextMiningBlock.z = NextMiningBlock.z + 1
+            elseif Position.direction == "w" and Position.x <= 1 then
                 TurnLeft()
                 NextMiningBlock.z = NextMiningBlock.z + 1
-            elseif Position.direction == "n" then
-                NextMiningBlock.z = NextMiningBlock.z + 1
-            elseif Position.direction == "s" then
-                NextMiningBlock.z = NextMiningBlock.z - 1
+            elseif Position.direction == "s" and Position.x >= 16 then
+                TurnRight()
+                NextMiningBlock.x = NextMiningBlock.x - 1
+            elseif Position.direction == "s" and Position.x <= 1 then
+                TurnLeft()
+                NextMiningBlock.x = NextMiningBlock.x + 1
+            elseif Position.direction == "e" then
+                NextMiningBlock.x = NextMiningBlock.x + 1
+            elseif Position.direction == "w" then
+                NextMiningBlock.x = NextMiningBlock.x - 1
             end
         else
             -- go to starting point of next plane
