@@ -157,6 +157,7 @@ function HaveInventorySpace()
     for i = 1, 16, 1 do
         turtle.select(i)
         if turtle.getItemSpace() == 64 then
+            turtle.select(1)
             return true
         end
     end
