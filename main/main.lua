@@ -12,6 +12,7 @@ NextMiningBlock = {
     x = 1,
     y = 252,
     z = 1,
+    mining_plane = false
 }
 
 MINE_START = {
@@ -44,6 +45,7 @@ function Main()
         GotoPoint(MINE_START, {"x", "y", "z"})
         Mine()
         if not HaveInventorySpace() then
+            print("emptying inventory")
             EmptyInventory()
         end
         if not HaveEnoughFuel() then
@@ -74,10 +76,6 @@ function Mine()
         end
         Orient(LastMiningPosition.direction)
     end
-    
-
-
-    local mining_plane = false
     while OkToMine() do
         print("Position: ", Position.x , Position.y, Position.z)
         print("NextMiningBlock", NextMiningBlock.x, NextMiningBlock.y, NextMiningBlock.z)
@@ -91,12 +89,12 @@ function Mine()
             MoveDown()
             NextMiningBlock.x = NextMiningBlock.x + 1
             Orient("e")
-            mining_plane = true
-        elseif mining_plane then
+            NextMiningBlock.mining_plane = true
+        elseif NextMiningBlock.mining_plane then
             turtle.dig()
             MoveForward()
             if Position.z >= 16 and Position.x <= 1 then
-                mining_plane = false
+                NextMiningBlock.mining_plane = false
                 NextMiningBlock.x = 1
                 NextMiningBlock.z = 1
                 NextMiningBlock.y = Position.y - 1
