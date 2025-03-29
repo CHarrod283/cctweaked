@@ -404,3 +404,4 @@ function HaveInventorySpace()
     return false
 end
 
+Main()
