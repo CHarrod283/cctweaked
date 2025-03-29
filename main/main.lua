@@ -147,7 +147,10 @@ function DebugGlobals()
 end
 
 function Refuel()
-    assert(false, "Refuel Unimplemented")
+    GotoPoint(GetPoint(FUEL_DEPO, {x = 1, y = 0, z = 0}), {"y", "z", "x"})
+    Orient("w")
+    turtle.select(1)
+    turtle.suck(10)
 end
 
 --[[
