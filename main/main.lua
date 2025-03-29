@@ -131,11 +131,11 @@ function MoveForward()
         if Position.direction == "n" then
             Position.z = Position.z + 1
         elseif Position.direction == "e" then
-            Position.x = Position.x - 1
+            Position.x = Position.x + 1
         elseif Position.direction == "s" then
             Position.z = Position.z - 1
         elseif Position.direction == "w" then
-            Position.x = Position.x + 1
+            Position.x = Position.x - 1
         end
     end
 end
@@ -145,11 +145,11 @@ function MoveBack()
         if Position.direction == "n" then
             Position.z = Position.z - 1
         elseif Position.direction == "e" then
-            Position.x = Position.x + 1
+            Position.x = Position.x - 1
         elseif Position.direction == "s" then
             Position.z = Position.z + 1
         elseif Position.direction == "w" then
-            Position.x = Position.x - 1
+            Position.x = Position.x + 1
         end
     end
 end
