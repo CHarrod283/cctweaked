@@ -116,7 +116,7 @@ function Mine()
             end
         else
             -- go to starting point of next plane
-            if Position.direction == "s" then
+            if Position.direction == "w" then
                 TurnRight()
                 MoveForward()
             elseif Position.x > 1 then
