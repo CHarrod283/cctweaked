@@ -12,7 +12,7 @@ NextMiningBlock = {
     x = 1,
     y = 252,
     z = 1,
-    mining_plane = false
+    mining_plane = false,
 }
 
 MINE_START = {
@@ -71,11 +71,10 @@ Resumable mining function
 ]]--
 function Mine()
     if LastMiningPosition ~= nil then
-        while OkToMine() do
-            MoveTowardsPoint(LastMiningPosition, {"x", "z", "y"})
-        end
+        GotoPoint(LastMiningPosition, {"x", "z", "y"})
         Orient(LastMiningPosition.direction)
     end
+    
     while OkToMine() do
         print("Position: ", Position.x , Position.y, Position.z)
         print("NextMiningBlock", NextMiningBlock.x, NextMiningBlock.y, NextMiningBlock.z)
