@@ -49,6 +49,7 @@ function Main()
             EmptyInventory()
         end
         if not HaveEnoughFuel() then
+            EmptyInventory()
             Refuel()
         end
     end
