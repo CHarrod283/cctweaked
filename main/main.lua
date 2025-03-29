@@ -33,8 +33,8 @@ end
 Resumable mining function
 ]]--
 function Mine()
+    local mining_plane = false
     while OkToMine() do
-        local mining_plane = false
         -- if were above our block
         if Position.y - 1 == NextMiningBlock.y then
             if Position.y == 1 then
