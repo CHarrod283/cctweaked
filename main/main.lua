@@ -161,3 +161,6 @@ function HaveInventorySpace()
         end
     end
 end
+
+
+Mine()
