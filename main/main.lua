@@ -80,7 +80,7 @@ function Mine()
             elseif Position.x > 1 then
                 MoveForward()
             else
-            if Position.x == 1 then
+            if Position.x <= 1 then
                 TurnRight()
             end
         end
