@@ -6,11 +6,26 @@ Position = {
     z = 1,
 }
 
+LastMiningPosition = nil
+
+NextMiningBlock {
+    x = 1,
+    y = 252,
+    z = 1,
+}
+
+MINE_START = {
+    x = 1,
+    y = 253,
+    z = 1,
+}
+
 ORIGIN = {
     x = 1,
     y = 253,
     z = 1
 }
+
 FUEL_DEPO = {
     x = 0,
     y = 253,
@@ -22,27 +37,12 @@ INVENTORY_DROPOFF = {
     z = 2
 }
 
-MiningOrder = {
-    START = {
-        x = 1,
-        y = 253,
-        z = 1,
-    },
-    DIMENSIONS = {
-        x = 5,
-        y = 5,
-        z = 5
-    },
-    RelativeNextMiningBlock = {
-        x = 1,
-        y = 1,
-        z = 1,
-    }
-}
+
 
 function Main()
-    while MiningOrder.RelativeNextMiningBlock ~= nil do
-        MineV2()
+    while NextMiningBlock ~= nil do
+        GotoPoint(MINE_START, {"x", "y", "z"})
+        Mine()
         if not HaveInventorySpace() then
             EmptyInventory()
         end
@@ -57,6 +57,9 @@ end
 We are ok to mine if we are within 1 block of our mineable block in any direction and have fuel and inventory space
 ]]--
 function OkToMine()
+    if NextMiningBlock == nil then
+        return false
+    end
     return HaveEnoughFuel() and HaveInventorySpace()
 end
 
@@ -64,17 +67,80 @@ end
 --[[
 Resumable mining function
 ]]--
-function MineV2()
-    assert(Position.x == MiningOrder.START.x and Position.y == MiningOrder.START.y and Position.z == MiningOrder.START.z, "Not at starting mine position ", DebugGlobals())
-    if (MiningOrder.DIMENSIONS.x <= 0 or MiningOrder.DIMENSIONS.y <= 0 or MiningOrder.DIMENSIONS.z <= 0) then
-        return -- nothing to do
+function Mine()
+    if LastMiningPosition ~= nil then
+        while OkToMine() do
+            MoveTowardsPoint(LastMiningPosition, {"x", "z", "y"})
+        end
+        Orient(LastMiningPosition.direction)
     end
     
+
+
+    local mining_plane = false
+    while OkToMine() do
+        print("Position: ", Position.x , Position.y, Position.z)
+        print("NextMiningBlock", NextMiningBlock.x, NextMiningBlock.y, NextMiningBlock.z)
+        -- if were above our block
+        if Position.y - 1 == NextMiningBlock.y and Position.x == NextMiningBlock.x and Position.z == NextMiningBlock.z then
+            if Position.y == 1 then
+                NextMiningBlock = nil
+                return
+            end
+            turtle.digDown()
+            MoveDown()
+            NextMiningBlock.z = NextMiningBlock.z + 1
+            mining_plane = true
+        elseif mining_plane then
+            turtle.dig()
+            MoveForward()
+            if Position.x >= 16 and Position.z <= 1 then
+                mining_plane = false
+                NextMiningBlock.x = 1
+                NextMiningBlock.z = 1
+                NextMiningBlock.y = Position.y - 1
+            elseif Position.direction == "n" and Position.z >= 16 then
+                TurnRight()
+                NextMiningBlock.x = NextMiningBlock.x + 1
+            elseif Position.direction == "s" and Position.z <= 1 then
+                TurnLeft()
+                NextMiningBlock.x = NextMiningBlock.x + 1
+            elseif Position.direction == "e" and Position.z >= 16 then
+                TurnRight()
+                NextMiningBlock.z = NextMiningBlock.z - 1
+            elseif Position.direction == "e" and Position.z <= 1 then
+                TurnLeft()
+                NextMiningBlock.z = NextMiningBlock.z + 1
+            elseif Position.direction == "n" then
+                NextMiningBlock.z = NextMiningBlock.z + 1
+            elseif Position.direction == "s" then
+                NextMiningBlock.z = NextMiningBlock.z - 1
+            end
+        else
+            -- go to starting point of next plane
+            if Position.direction == "s" then
+                TurnRight()
+                MoveForward()
+            elseif Position.x > 1 then
+                MoveForward()
+            end
+            if Position.x <= 1 then
+                TurnRight()
+            end
+        end
+    end
+    SaveLastMiningPosition()
 end
 
 
-
-
+function SaveLastMiningPosition()
+    LastMiningPosition = {
+        x = Position.x,
+        y = Position.y,
+        z = Position.z,
+        direction = Position.direction
+    }
+end
 
 function DebugGlobals()
     --local debug_output = "Position: " + Position.x + ", " + Position.y + ", " + Position.z + "\n"
