@@ -151,6 +151,7 @@ function Refuel()
     Orient("w")
     turtle.select(1)
     turtle.suck(10)
+    turtle.refuel()
 end
 
 --[[
