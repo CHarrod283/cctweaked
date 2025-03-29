@@ -338,9 +338,9 @@ end
 
 function GetPoint(position, offset)
     return {
-        position.x + offset.x,
-        position.y + offset.y,
-        position.z + offset.z
+        x = position.x + offset.x,
+        y = position.y + offset.y,
+        z = position.z + offset.z
     }
 end
 
