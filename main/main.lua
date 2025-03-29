@@ -8,7 +8,7 @@ Position = {
 
 LastMiningPosition = nil
 
-NextMiningBlock {
+NextMiningBlock = {
     x = 1,
     y = 252,
     z = 1,
