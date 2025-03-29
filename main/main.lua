@@ -319,7 +319,13 @@ function Orient(direction)
 end
 
 function EmptyInventory()
-    assert( false, "EmptyInventory not implemented")
+    GotoPoint(GetPoint(INVENTORY_DROPOFF, {x = 1, y = 0, z = 0}), {"y", "z", "x"})
+    Orient("w")
+    for i = 1, 16, 1 do
+        turtle.select(i)
+        turtle.drop()
+    end
+    turtle.select(1)
 end
 
 
