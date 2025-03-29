@@ -134,20 +134,20 @@ function MineV2()
     end
 
     -- if we arent next to our next mining block, go to above the next mining block
-    print("Getting next mining block")
     local next_mining_block = GetPoint(MiningOrder.START, MiningOrder.RelativeNextMiningBlock)
-    print("Getting Point above next mining block")
     local point_above_next_mining_block = GetPoint(next_mining_block, {x = 0, y = 1, z = 0})
     while OkToMine() do
-        print("moving towards point")
         MoveTowardsPoint(point_above_next_mining_block, {"x", "z", "y"})
     end
-    print("Beginning to mine")
     -- mine
-    while OkToMine() do
+    local i = 0
+    while OkToMine() and i < 10 do
+        i = i + 1
         print("getting mining block")
         next_mining_block = GetPoint(MiningOrder.START, MiningOrder.RelativeNextMiningBlock)
+        print("NextMiningBlock", next_mining_block.x, next_mining_block.y, next_mining_block.z)
         MineBlock()
+        print("MinedBlock")
         MoveTowardsPoint(next_mining_block, MiningOrder.METHOD)
         UpdateRelativeNextMiningBlock()
     end
