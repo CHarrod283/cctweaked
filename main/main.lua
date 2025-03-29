@@ -119,7 +119,7 @@ function Mine()
             if Position.direction == "w" then
                 TurnRight()
                 MoveForward()
-            elseif Position.x > 1 then
+            elseif Position.z > 1 then
                 MoveForward()
             end
             if Position.x <= 1 then
