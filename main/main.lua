@@ -122,7 +122,7 @@ function Mine()
             elseif Position.z > 1 then
                 MoveForward()
             end
-            if Position.x <= 1 then
+            if Position.z <= 1 then
                 TurnRight()
             end
         end
