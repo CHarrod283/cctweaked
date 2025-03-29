@@ -210,9 +210,9 @@ end
 
 
 function DebugGlobals()
-    local debug_output = "Position: " + Position.x + ", " + Position.y + ", " + Position.z + "\n"
-    debug_output = debug_output + "NextMiningBlock " + MiningOrder.NextMiningBlock.x +", " + MiningOrder.NextMiningBlock.y +", " +  MiningOrder.NextMiningBlock.z
-    return debug_output
+    --local debug_output = "Position: " + Position.x + ", " + Position.y + ", " + Position.z + "\n"
+    --debug_output = debug_output + "NextMiningBlock " + MiningOrder.NextMiningBlock.x +", " + MiningOrder.NextMiningBlock.y +", " +  MiningOrder.NextMiningBlock.z
+    return "uh oh"
 end
 
 function Refuel()
