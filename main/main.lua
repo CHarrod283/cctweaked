@@ -71,7 +71,7 @@ end
 Resumable mining function
 ]]--
 function Mine()
-    if ~OkToMine() then
+    if not OkToMine() then
         -- add guard so if we're not ok to mine we dont go to last mining position
         return
     end
