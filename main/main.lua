@@ -71,6 +71,11 @@ end
 Resumable mining function
 ]]--
 function Mine()
+    if ~OkToMine() then
+        -- add guard so if we're not ok to mine we dont go to last mining position
+        return
+    end
+
     if LastMiningPosition ~= nil then
         GotoPoint(LastMiningPosition, {"x", "z", "y"})
         Orient(LastMiningPosition.direction)
