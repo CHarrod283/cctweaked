@@ -87,7 +87,7 @@ function Mine()
         print("NextMiningBlock", NextMiningBlock.x, NextMiningBlock.y, NextMiningBlock.z)
         -- if were above our block
         if Position.y - 1 == NextMiningBlock.y and Position.x == NextMiningBlock.x and Position.z == NextMiningBlock.z then
-            if Position.y == 1 then
+            if Position.y == -63 then
                 NextMiningBlock = nil
                 return
             end
