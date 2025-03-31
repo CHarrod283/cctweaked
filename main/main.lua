@@ -53,8 +53,9 @@ function Main()
             Refuel()
         end
     end
+    EmptyInventory()
     GotoPoint(ORIGIN, {"y", "x", "z"})
-    Orient("s")
+    Orient("e")
 end
 --[[
 We are ok to mine if we are within 1 block of our mineable block in any direction and have fuel and inventory space
