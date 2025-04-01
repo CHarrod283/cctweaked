@@ -191,13 +191,13 @@ end
 
 function EmptyInventory()
     turtle.digUp() -- ensure we can place our block
-    turtle.select(REFUEL_SLOT)
+    turtle.select(DUMP_INVENTORY_SLOT)
     turtle.placeUp()
     for i = 1, LAST_INVENTORY_SLOT, 1 do
         turtle.select(i)
         turtle.dropUp()
     end
-    turtle.select(REFUEL_SLOT)
+    turtle.select(DUMP_INVENTORY_SLOT)
     turtle.digUp()
     turtle.select(1)
 end
