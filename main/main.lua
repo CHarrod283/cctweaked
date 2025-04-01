@@ -24,6 +24,15 @@ MiningInfo = {
     done = false
 }
 
+function GetPoint(position, offset)
+    return {
+        x = position.x + offset.x,
+        y = position.y + offset.y,
+        z = position.z + offset.z
+    }
+end
+
+
 FUEL_DEPO = GetPoint(ORIGIN, {x = 0, y = 1, z = 0})
 INVENTORY_DROPOFF = GetPoint(ORIGIN, {x = 0, y = 1, z = 1})
 
@@ -296,13 +305,7 @@ function FaceBlock(position, method)
 end
 
 
-function GetPoint(position, offset)
-    return {
-        x = position.x + offset.x,
-        y = position.y + offset.y,
-        z = position.z + offset.z
-    }
-end
+
 
 
 
