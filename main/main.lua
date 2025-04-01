@@ -186,10 +186,10 @@ function DebugGlobals()
 end
 
 function Refuel()
-    GotoPoint(GetPoint(FUEL_DEPO, {x = 1, y = 0, z = 0}), {"y", "z", "x"})
+    GotoPoint(GetPoint(FUEL_DEPO, {x = 0, y = -1, z = 0}), {"y", "z", "x"})
     Orient("w")
     turtle.select(1)
-    turtle.suck(10)
+    turtle.suckUp(10)
     turtle.refuel()
 end
 
@@ -353,11 +353,11 @@ function Orient(direction)
 end
 
 function EmptyInventory()
-    GotoPoint(GetPoint(INVENTORY_DROPOFF, {x = 1, y = 0, z = 0}), {"y", "z", "x"})
+    GotoPoint(GetPoint(INVENTORY_DROPOFF, {x = 0, y = -1, z = 0}), {"y", "z", "x"})
     Orient("w")
     for i = 1, 16, 1 do
         turtle.select(i)
-        turtle.drop()
+        turtle.dropUp()
     end
     turtle.select(1)
 end
