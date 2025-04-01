@@ -1,48 +1,35 @@
 
-Position = {
-    direction = 'e',
-    x = 1,
-    y = 253,
-    z = 1,
-}
-
-LastMiningPosition = nil
-
-NextMiningBlock = {
-    x = 1,
-    y = 252,
-    z = 1,
-    mining_plane = false,
-}
-
-MINE_START = {
-    x = 1,
-    y = 253,
-    z = 1,
-}
-
 ORIGIN = {
     x = 1,
     y = 253,
     z = 1
 }
 
-FUEL_DEPO = {
-    x = 0,
-    y = 253,
-    z = 1
-}
-INVENTORY_DROPOFF = {
-    x = 0,
-    y = 253,
-    z = 2
+MIN_Y_POSITION = -63
+
+MINE_SIZE = 16
+
+Position = {
+    direction = 'e',
+    x = ORIGIN.x,
+    y = ORIGIN.y,
+    z = ORIGIN.z
 }
 
+MiningInfo = {
+    just_started = true;
+    LastMiningPosition = nil,
+    x_dir = 1,
+    z_dir = 1,
+    done = false
+}
+
+FUEL_DEPO = GetPoint(ORIGIN, {x = 0, y = 1, z = 0})
+INVENTORY_DROPOFF = GetPoint(ORIGIN, {x = 0, y = 1, z = 1})
 
 
 function Main()
-    while NextMiningBlock ~= nil do
-        GotoPoint(MINE_START, {"x", "y", "z"})
+    while not MiningInfo.done do
         Mine()
         if not HaveInventorySpace() then
             print("emptying inventory")
@@ -61,7 +48,7 @@ end
 We are ok to mine if we are within 1 block of our mineable block in any direction and have fuel and inventory space
 ]]--
 function OkToMine()
-    if NextMiningBlock == nil then
+    if MiningInfo.done then
         return false
     end
     return HaveEnoughFuel() and HaveInventorySpace()
@@ -72,66 +59,102 @@ end
 Resumable mining function
 ]]--
 function Mine()
+    GotoPoint(ORIGIN, {"y", "x", "z"})
     if not OkToMine() then
         -- add guard so if we're not ok to mine we dont go to last mining position
         return
     end
 
-    if LastMiningPosition ~= nil then
+    if MiningInfo.just_started then
+        turtle.digDown()
+        MoveDown()
+        turtle.digDown()
+        MoveDown()
+        turtle.digDown()
+        MiningInfo.just_started = false
+    end
+
+    if MiningInfo.LastMiningPosition ~= nil then
         GotoPoint(LastMiningPosition, {"x", "z", "y"})
         Orient(LastMiningPosition.direction)
     end
-    
+
     while OkToMine() do
-        print("Position: ", Position.x , Position.y, Position.z)
-        print("NextMiningBlock", NextMiningBlock.x, NextMiningBlock.y, NextMiningBlock.z)
-        -- if were above our block
-        if Position.y - 1 == NextMiningBlock.y and Position.x == NextMiningBlock.x and Position.z == NextMiningBlock.z then
-            if Position.y == -63 then
-                NextMiningBlock = nil
-                return
-            end
+        if
+            Position.y <= MIN_Y_POSITION and
+            (Position.x >= MINE_SIZE and MiningInfo.x_dir == 1 or Position.x <= 1 and MiningInfo.x_dir == -1) and
+            (Position.z >= MINE_SIZE and MiningInfo.z_dir == 1 or Position.z <= 1 and MiningInfo.z_dir == -1)
+        then
+            MiningInfo.done = true
+            return
+        elseif
+            (Position.x >= MINE_SIZE and MiningInfo.x_dir == 1 or Position.x <= 1 and MiningInfo.x_dir == -1) and
+            (Position.z >= MINE_SIZE and MiningInfo.z_dir == 1 or Position.z <= 1 and MiningInfo.z_dir == -1)
+        then
+            MoveDown()
             turtle.digDown()
             MoveDown()
-            NextMiningBlock.x = NextMiningBlock.x + 1
-            Orient("e")
-            NextMiningBlock.mining_plane = true
-        elseif NextMiningBlock.mining_plane then
-            turtle.dig()
-            MoveForward()
-            if Position.z >= 16 and Position.x <= 1 then
-                NextMiningBlock.mining_plane = false
-                NextMiningBlock.x = 1
-                NextMiningBlock.z = 1
-                NextMiningBlock.y = Position.y - 1
-            elseif Position.direction == "e" and Position.x >= 16 then
-                TurnRight()
-                NextMiningBlock.z = NextMiningBlock.z + 1
-            elseif Position.direction == "w" and Position.x <= 1 then
-                TurnLeft()
-                NextMiningBlock.z = NextMiningBlock.z + 1
-            elseif Position.direction == "s" and Position.x >= 16 then
-                TurnRight()
-                NextMiningBlock.x = NextMiningBlock.x - 1
-            elseif Position.direction == "s" and Position.x <= 1 then
-                TurnLeft()
-                NextMiningBlock.x = NextMiningBlock.x + 1
-            elseif Position.direction == "e" then
-                NextMiningBlock.x = NextMiningBlock.x + 1
-            elseif Position.direction == "w" then
-                NextMiningBlock.x = NextMiningBlock.x - 1
+            turtle.digDown()
+            MoveDown()
+            turtle.digDown()
+            TurnRight()
+            TurnRight()
+            if MiningInfo.x_dir == 1 then
+                MiningInfo.x_dir = -1
+            else
+                MiningInfo.x_dir = 1
+            end
+            if MiningInfo.z_dir == 1 then
+                MiningInfo.z_dir = -1
+            else
+                MiningInfo.z_dir = 1
+            end
+        elseif Position.x >= MINE_SIZE and MiningInfo.x_dir == 1 or Position.x <= 1 and MiningInfo.x_dir == -1 then
+            if MiningInfo.z_dir == 1 then
+                if MiningInfo.x_dir == 1 then
+                    TurnRight()
+                    turtle.dig()
+                    MoveForward()
+                    turtle.digUp()
+                    turtle.digDown()
+                    TurnRight()
+                else
+                    TurnLeft()
+                    turtle.dig()
+                    MoveForward()
+                    turtle.digUp()
+                    turtle.digDown()
+                    TurnLeft()
+                end
+            else
+                if MiningInfo.x_dir == 1 then
+                    TurnLeft()
+                    turtle.dig()
+                    MoveForward()
+                    turtle.digUp()
+                    turtle.digDown()
+                    TurnLeft()
+                else
+                    TurnRight()
+                    turtle.dig()
+                    MoveForward()
+                    turtle.digUp()
+                    turtle.digDown()
+                    TurnRight()
+                end
+            end
+
+
+            if MiningInfo.x_dir == 1 then
+                MiningInfo.x_dir = -1
+            else
+                MiningInfo.x_dir = 1
             end
         else
-            -- go to starting point of next plane
-            if Position.direction == "w" then
-                TurnRight()
-                MoveForward()
-            elseif Position.z > 1 then
-                MoveForward()
-            end
-            if Position.z <= 1 then
-                TurnRight()
-            end
+            turtle.dig()
+            MoveForward()
+            turtle.digUp()
+            turtle.digDown()
         end
     end
     SaveLastMiningPosition()
