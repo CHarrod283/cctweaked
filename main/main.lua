@@ -171,7 +171,7 @@ end
 
 
 function SaveLastMiningPosition()
-    LastMiningPosition = {
+    MiningInfo.LastMiningPosition = {
         x = Position.x,
         y = Position.y,
         z = Position.z,
