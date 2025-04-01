@@ -84,8 +84,8 @@ function Mine()
     end
 
     if MiningInfo.LastMiningPosition ~= nil then
-        GotoPoint(LastMiningPosition, {"x", "z", "y"})
-        Orient(LastMiningPosition.direction)
+        GotoPoint(MiningInfo.LastMiningPosition, {"x", "z", "y"})
+        Orient(MiningInfo.LastMiningPosition.direction)
     end
 
     while OkToMine() do
