@@ -1,4 +1,6 @@
 
+require "utils"
+
 ORIGIN = {
     x = 1,
     y = 253,
@@ -7,7 +9,10 @@ ORIGIN = {
 
 MIN_Y_POSITION = -63
 
+MAX_Y_POSITION = 252
+
 MINE_SIZE = 16
+MINE_DIRECTION = 'e'
 
 Position = {
     direction = 'e',
@@ -16,50 +21,36 @@ Position = {
     z = ORIGIN.z
 }
 
+REFUEL_SLOT = 16
+DUMP_INVENTORY_SLOT = 15
+LAST_INVENTORY_SLOT = 14
+
 MiningInfo = {
-    just_started = true;
-    LastMiningPosition = nil,
     x_dir = 1,
     z_dir = 1,
+    y_dir = -1,
     done = false
 }
 
-function GetPoint(position, offset)
-    return {
-        x = position.x + offset.x,
-        y = position.y + offset.y,
-        z = position.z + offset.z
-    }
-end
-
-
-FUEL_DEPO = GetPoint(ORIGIN, {x = 0, y = 1, z = 0})
-INVENTORY_DROPOFF = GetPoint(ORIGIN, {x = 0, y = 1, z = 1})
 
 
 function Main()
-    while not MiningInfo.done do
+    while true do
         Mine()
         if not HaveInventorySpace() then
             print("emptying inventory")
             EmptyInventory()
         end
         if not HaveEnoughFuel() then
-            EmptyInventory()
+            print("refueling")
             Refuel()
         end
     end
-    EmptyInventory()
-    GotoPoint(ORIGIN, {"y", "x", "z"})
-    Orient("e")
 end
 --[[
 We are ok to mine if we are within 1 block of our mineable block in any direction and have fuel and inventory space
 ]]--
 function OkToMine()
-    if MiningInfo.done then
-        return false
-    end
     return HaveEnoughFuel() and HaveInventorySpace()
 end
 
@@ -68,34 +59,47 @@ end
 Resumable mining function
 ]]--
 function Mine()
-    GotoPoint(ORIGIN, {"y", "x", "z"})
-    if not OkToMine() then
-        -- add guard so if we're not ok to mine we dont go to last mining position
-        return
-    end
-
-    if MiningInfo.just_started then
-        turtle.digDown()
-        MoveDown()
-        turtle.digDown()
-        MoveDown()
-        turtle.digDown()
-        MiningInfo.just_started = false
-    end
-
-    if MiningInfo.LastMiningPosition ~= nil then
-        GotoPoint(MiningInfo.LastMiningPosition, {"x", "z", "y"})
-        Orient(MiningInfo.LastMiningPosition.direction)
-    end
-
     while OkToMine() do
         if
-            Position.y <= MIN_Y_POSITION and
+            (MiningInfo.y_dir == -1 and Position.y <= MIN_Y_POSITION or MiningInfo.y_dir == 1 and Position.y >= MAX_Y_POSITION) and
             (Position.x >= MINE_SIZE and MiningInfo.x_dir == 1 or Position.x <= 1 and MiningInfo.x_dir == -1) and
             (Position.z >= MINE_SIZE and MiningInfo.z_dir == 1 or Position.z <= 1 and MiningInfo.z_dir == -1)
         then
-            MiningInfo.done = true
-            return
+            Orient(MINE_DIRECTION)
+            while
+                (MINE_DIRECTION == "e" and Position.x <= MINE_SIZE) or
+                (MINE_DIRECTION == "w" and Position.x >= 1) or
+                (MINE_DIRECTION == "s" and Position.z <= MINE_SIZE) or
+                (MINE_DIRECTION == "n" and Position.z >= 1)
+            do
+                MoveForward()
+            end
+            turtle.dig()
+            MoveForward()
+            turtle.digUp()
+            turtle.digDown()
+
+            if MiningInfo.y_dir == 1 then
+                MiningInfo.y_dir = -1
+            else
+                MiningInfo.y_dir = 1
+            end
+            if Position.z ==  1 or Position.z == MINE_SIZE + 1 then
+                MiningInfo.z_dir = 1
+                Position.z = 1
+            else
+                MiningInfo.z_dir = -1
+                Position.z = MINE_SIZE
+            end
+            if Position.x == 1 or Position.x == MINE_SIZE + 1 then
+                MiningInfo.x_dir = 1
+                Position.x = 1
+                Orient("e")
+            else 
+                MiningInfo.x_dir = -1
+                Position.x = MINE_SIZE
+                Orient("w")
+            end
         elseif
             (Position.x >= MINE_SIZE and MiningInfo.x_dir == 1 or Position.x <= 1 and MiningInfo.x_dir == -1) and
             (Position.z >= MINE_SIZE and MiningInfo.z_dir == 1 or Position.z <= 1 and MiningInfo.z_dir == -1)
@@ -166,17 +170,6 @@ function Mine()
             turtle.digDown()
         end
     end
-    SaveLastMiningPosition()
-end
-
-
-function SaveLastMiningPosition()
-    MiningInfo.LastMiningPosition = {
-        x = Position.x,
-        y = Position.y,
-        z = Position.z,
-        direction = Position.direction
-    }
 end
 
 function DebugGlobals()
@@ -186,249 +179,31 @@ function DebugGlobals()
 end
 
 function Refuel()
-    GotoPoint(GetPoint(FUEL_DEPO, {x = 0, y = -1, z = 0}), {"y", "z", "x"})
-    Orient("w")
-    turtle.select(1)
+    turtle.select(REFUEL_SLOT)
+    turtle.placeUp()
     turtle.suckUp(10)
     turtle.refuel()
-end
-
---[[
-Goes to a point
-Position is a xyz position (i.e {1, 2,3})
-Method is "how" to get there, i.e if you want to align x first then y then z you input {"x", "y", "z"}
-]]--
-function GotoPoint(position, method)
-    for i = 1, #method, 1 do
-        if method[i] == "x" then
-            GotoX(position)
-        elseif method[i] == "y" then
-            GotoY(position)
-        elseif method[i] == "z" then
-            GotoZ(position)
-        end
-    end
-end
-
-function GotoY(position)
-    while Position.y > position.y do
-        MoveDown()
-    end
-    while Position.y < position.y do
-        MoveUp()
-    end
-end
-
-function GotoX(position)
-    if Position.x < position.x then
-        Orient("e")
-    elseif Position.x > position.x then
-        Orient("w")
-    end
-    while Position.x ~= position.x do
-        MoveForward()
-    end
-end
-
-function GotoZ(position)
-    if Position.z > position.z then
-        Orient("n")
-    elseif Position.z < position.z then
-        Orient("s")
-    end
-    while Position.z ~= position.z do
-        MoveForward()
-    end
-end
-
---[[
-Moves 1 block towards a point prioritized by method
-]]--
-function MoveTowardsPoint(position, method)
-    for i = 1, #method, 1 do
-        if method[i] == "x" and Position.x ~= position.x then
-            MoveTowardsX(position)
-            break
-        elseif method[i] == "y" and Position.y ~= position.y then
-            MoveTowardsY(position)
-            break
-        elseif method[i] == "z" and Position.z ~= position.z then
-            MoveTowardsZ(position)
-            break
-        end
-    end
-end
-
-function MoveTowardsY(position)
-    if Position.y > position.y then
-        MoveDown()
-    end
-    if Position.y < position.y then
-        MoveUp()
-    end
-end
-
-function MoveTowardsX(position)
-    if Position.x < position.x then
-        Orient("e")
-    elseif Position.x > position.x then
-        Orient("w")
-    end
-    MoveForward()
-end
-
-function MoveTowardsZ(position)
-    if Position.z > position.z then
-        Orient("n")
-    elseif Position.z < position.z then
-        Orient("s")
-    end
-    MoveForward()
-end
-
-function FaceBlock(position, method)
-    for i = 1, #method, 1 do
-        if method[i] == "x" and Position.x < position.x then
-            Orient("e")
-            break
-        elseif method[i] == "x" and Position.x > position.x then
-            Orient("w")
-            break
-        elseif method[i] == "z" and Position.z < position.z then
-            Orient("s")
-            break
-        elseif method[i] == "z" and Position.z > position.z then
-            Orient("n")
-            break
-        end
-    end
+    turtle.digUp()
+    turtle.select(1)
 end
 
 
-
-
-
-
-function Orient(direction)
-    if Position.direction == direction then
-        return
-    end
-    if direction == "n" then
-        if Position.direction == "s" then
-            TurnRight()
-            TurnRight()
-        elseif Position.direction == "e" then
-            TurnLeft()
-        elseif Position.direction == "w" then
-            TurnRight()
-        end
-    elseif direction == "e" then
-        if Position.direction == "w" then
-            TurnRight()
-            TurnRight()
-        elseif Position.direction == "s" then
-            TurnLeft()
-        elseif Position.direction == "n" then
-            TurnRight()
-        end
-    elseif direction == "s" then
-        if Position.direction == "n" then
-            TurnRight()
-            TurnRight()
-        elseif Position.direction == "e" then
-            TurnRight()
-        elseif Position.direction == "w" then
-            TurnLeft()
-        end
-    elseif direction == "w" then
-        if Position.direction == "e" then
-            TurnRight()
-            TurnRight()
-        elseif Position.direction == "s" then
-            TurnRight()
-        elseif Position.direction == "n" then
-            TurnLeft()
-        end
-    end
-end
 
 function EmptyInventory()
-    GotoPoint(GetPoint(INVENTORY_DROPOFF, {x = 0, y = -1, z = 0}), {"y", "z", "x"})
-    Orient("w")
-    for i = 1, 16, 1 do
+    turtle.digUp() -- ensure we can place our block
+    turtle.select(REFUEL_SLOT)
+    turtle.placeUp()
+    for i = 1, LAST_INVENTORY_SLOT, 1 do
         turtle.select(i)
         turtle.dropUp()
     end
+    turtle.select(REFUEL_SLOT)
+    turtle.digUp()
     turtle.select(1)
 end
 
 
-function TurnRight()
-    turtle.turnRight()
-    if Position.direction == "n" then
-        Position.direction = "e"
-    elseif Position.direction == "e" then
-        Position.direction = "s"
-    elseif Position.direction == "s" then
-        Position.direction = "w"
-    elseif Position.direction == "w" then
-        Position.direction = "n"
-    end
-end
 
-
-function TurnLeft()
-    turtle.turnLeft()
-    if Position.direction == "n" then
-        Position.direction = "w"
-    elseif Position.direction == "w" then
-        Position.direction = "s"
-    elseif Position.direction == "s" then
-        Position.direction = "e"
-    elseif Position.direction == "e" then
-        Position.direction = "n"
-    end
-end
-
-function MoveDown()
-    if turtle.down() then
-        Position.y = Position.y - 1
-    end
-end
-
-function MoveUp()
-    if turtle.up() then
-        Position.y = Position.y + 1
-    end
-end
-
-function MoveForward()
-    if turtle.forward() then
-        if Position.direction == "n" then
-            Position.z = Position.z - 1
-        elseif Position.direction == "e" then
-            Position.x = Position.x + 1
-        elseif Position.direction == "s" then
-            Position.z = Position.z + 1
-        elseif Position.direction == "w" then
-            Position.x = Position.x - 1
-        end
-    end
-end
-
-function MoveBack()
-    if turtle.back() then
-        if Position.direction == "n" then
-            Position.z = Position.z + 1
-        elseif Position.direction == "e" then
-            Position.x = Position.x - 1
-        elseif Position.direction == "s" then
-            Position.z = Position.z - 1
-        elseif Position.direction == "w" then
-            Position.x = Position.x + 1
-        end
-    end
-end
 
 function HaveEnoughFuel()
     return turtle.getFuelLevel() > 1000
@@ -436,7 +211,7 @@ end
 
 
 function HaveInventorySpace()
-    turtle.select(16)
+    turtle.select(LAST_INVENTORY_SLOT)
     if turtle.getItemSpace() == 64 then
         turtle.select(1)
         return true
