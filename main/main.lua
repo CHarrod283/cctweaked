@@ -106,14 +106,25 @@ function Mine()
             (Position.x >= MINE_SIZE and MiningInfo.x_dir == 1 or Position.x <= 1 and MiningInfo.x_dir == -1) and
             (Position.z >= MINE_SIZE and MiningInfo.z_dir == 1 or Position.z <= 1 and MiningInfo.z_dir == -1)
         then
-            MoveDown()
-            turtle.digDown()
-            MoveDown()
-            turtle.digDown()
-            MoveDown()
-            turtle.digDown()
-            TurnRight()
-            TurnRight()
+            if MiningInfo.y_dir == 1 then
+                MoveUp()
+                turtle.digUp()
+                MoveUp()
+                turtle.digUp()
+                MoveUp()
+                turtle.digUp()
+                TurnRight()
+                TurnRight()
+            else 
+                MoveDown()
+                turtle.digDown()
+                MoveDown()
+                turtle.digDown()
+                MoveDown()
+                turtle.digDown()
+                TurnRight()
+                TurnRight()
+            end
             if MiningInfo.x_dir == 1 then
                 MiningInfo.x_dir = -1
             else
