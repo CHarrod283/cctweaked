@@ -29,7 +29,6 @@ MiningInfo = {
     x_dir = 1,
     z_dir = 1,
     y_dir = -1,
-    done = false
 }
 
 
@@ -37,7 +36,6 @@ MiningInfo = {
 function Main()
     turtle.digDown()
     while true do
-        
         Mine()
         if not HaveInventorySpace() then
             print("emptying inventory")
