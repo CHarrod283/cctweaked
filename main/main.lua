@@ -69,10 +69,10 @@ function Mine()
         then
             Orient(MINE_DIRECTION)
             while
-                (MINE_DIRECTION == "e" and Position.x <= MINE_SIZE) or
-                (MINE_DIRECTION == "w" and Position.x >= 1) or
-                (MINE_DIRECTION == "s" and Position.z <= MINE_SIZE) or
-                (MINE_DIRECTION == "n" and Position.z >= 1)
+                (MINE_DIRECTION == "e" and Position.x < MINE_SIZE) or
+                (MINE_DIRECTION == "w" and Position.x > 1) or
+                (MINE_DIRECTION == "s" and Position.z < MINE_SIZE) or
+                (MINE_DIRECTION == "n" and Position.z > 1)
             do
                 MoveForward()
             end
