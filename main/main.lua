@@ -1,12 +1,6 @@
 
 require "utils"
 
-ORIGIN = {
-    x = 1,
-    y = 253,
-    z = 1
-}
-
 MIN_Y_POSITION = -63
 
 MAX_Y_POSITION = 252
@@ -16,9 +10,9 @@ MINE_DIRECTION = 'e'
 
 Position = {
     direction = 'e',
-    x = ORIGIN.x,
-    y = ORIGIN.y,
-    z = ORIGIN.z
+    x = 1,
+    y = 253,
+    z = 1
 }
 
 REFUEL_SLOT = 16
@@ -113,7 +107,7 @@ function Mine()
                 turtle.digUp()
                 TurnRight()
                 TurnRight()
-            else 
+            else
                 MoveDown()
                 turtle.digDown()
                 MoveDown()
@@ -134,38 +128,23 @@ function Mine()
                 MiningInfo.z_dir = 1
             end
         elseif Position.x >= MINE_SIZE and MiningInfo.x_dir == 1 or Position.x <= 1 and MiningInfo.x_dir == -1 then
-            if MiningInfo.z_dir == 1 then
-                if MiningInfo.x_dir == 1 then
-                    TurnRight()
-                    turtle.dig()
-                    MoveForward()
-                    turtle.digUp()
-                    turtle.digDown()
-                    TurnRight()
-                else
-                    TurnLeft()
-                    turtle.dig()
-                    MoveForward()
-                    turtle.digUp()
-                    turtle.digDown()
-                    TurnLeft()
-                end
+            if
+                MiningInfo.z_dir == 1 and MiningInfo.x_dir == 1 or
+                MiningInfo.z_dir == -1 and MiningInfo.x_dir == -1
+            then
+                TurnRight()
+                turtle.dig()
+                MoveForward()
+                turtle.digUp()
+                turtle.digDown()
+                TurnRight()
             else
-                if MiningInfo.x_dir == 1 then
-                    TurnLeft()
-                    turtle.dig()
-                    MoveForward()
-                    turtle.digUp()
-                    turtle.digDown()
-                    TurnLeft()
-                else
-                    TurnRight()
-                    turtle.dig()
-                    MoveForward()
-                    turtle.digUp()
-                    turtle.digDown()
-                    TurnRight()
-                end
+                TurnLeft()
+                turtle.dig()
+                MoveForward()
+                turtle.digUp()
+                turtle.digDown()
+                TurnLeft()
             end
 
 
