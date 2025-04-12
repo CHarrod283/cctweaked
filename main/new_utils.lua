@@ -78,6 +78,7 @@ function TurnLeft()
     if Position.direction == 0 then
         Position.direction = 4
     end
+    SavePositionAsLine()
 end
 
 function TurnRight()
@@ -86,6 +87,7 @@ function TurnRight()
     if Position.direction == 5 then
         Position.direction = 1
     end
+    SavePositionAsLine()
 end
 
 function CheckToRefuel()
