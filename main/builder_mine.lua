@@ -74,7 +74,7 @@ function PlaceMachines()
     turtle.select(REDSTONE_SLOT)
     turtle.placeDown()
     -- weird behavior where the first time we place the block, it doesnt trigger the builder, so just do it a few times
-    for i = 1, 10, 1 do 
+    for i = 1, 3, 1 do 
         os.sleep(5)
         turtle.digDown()
         turtle.placeDown()
