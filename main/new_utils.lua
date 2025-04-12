@@ -148,7 +148,7 @@ function MoveDown()
     if not turtle.down() then
         return
     end
-    Position.y = Position.y + 1
+    Position.y = Position.y - 1
     SavePositionAsLine()
 end
 
