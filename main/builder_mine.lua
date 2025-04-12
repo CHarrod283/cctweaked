@@ -18,11 +18,15 @@ function Main()
     GotoPoint(IDLE_POSITION, {"y", "x", "z"})
     Orient(1)
     PickUpMachines()
+    GotoPoint(IDLE_POSITION, {"y", "x", "z"})
     while true do
         GotoPoint(IDLE_POSITION, {"y", "x", "z"})
+        Orient(1)
         PlaceMachines()
         os.sleep(18 * 60)
         PickUpMachines()
+        GotoPoint(IDLE_POSITION, {"y", "x", "z"})
+        Orient(1)
         GoToNextChunk()
     end
 end
