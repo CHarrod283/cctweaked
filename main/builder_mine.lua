@@ -30,21 +30,30 @@ end
 
 function PickUpMachines()
     turtle.select(REDSTONE_SLOT)
-    turtle.digDown()
+    if turtle.getItemCount() == 0 then
+        turtle.digDown()
+    end
     TurnRight()
     turtle.select(DIM_CHEST_SLOT)
-    turtle.dig()
+    if turtle.getItemCount() == 0 then
+        turtle.dig()
+    end
     MoveDown()
     turtle.select(BUILDER_SLOT)
-    turtle.dig()
+    if turtle.getItemCount() == 0 then
+        turtle.dig()
+    end
     TurnLeft()
     MoveForward()
     TurnRight()
     turtle.select(FLUX_SLOT)
-    turtle.dig()
+    if turtle.getItemCount() == 0 then
+        turtle.dig()
+    end
 end
 
 function PlaceMachines()
+    MoveDown()
     MoveForward()
     TurnRight()
     turtle.select(FLUX_SLOT)
@@ -60,10 +69,12 @@ function PlaceMachines()
     TurnLeft()
     turtle.select(REDSTONE_SLOT)
     turtle.placeDown()
-    -- weird behavior where the first time we place the block, it doesnt trigger the builder, so just do it twice
-    os.sleep(5)
-    turtle.digDown()
-    turtle.placeDown()
+    -- weird behavior where the first time we place the block, it doesnt trigger the builder, so just do it a few times
+    for i = 1, 10, 1 do 
+        os.sleep(5)
+        turtle.digDown()
+        turtle.placeDown()
+    end
 end
 
 
@@ -75,3 +86,5 @@ function GoToNextChunk()
     MoveDown()
     ResetPosition()
 end
+
+Main()
