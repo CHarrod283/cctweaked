@@ -1,6 +1,8 @@
 {
     "Lua.diagnostics.globals": [
         "turtle",
-        "gps"
+        "gps",
+        "peripheral",
+        "redstone"
     ]
 }
