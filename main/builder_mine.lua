@@ -14,6 +14,7 @@ IDLE_POSITION = {
 
 
 function Main()
+    WriteStartupFile()
     LoadPositionFromLine()
     GotoPoint(IDLE_POSITION, {"y", "x", "z"})
     Orient(1)
@@ -31,6 +32,16 @@ function Main()
     end
 end
 
+
+function WriteStartupFile()
+    local startup_file = io.open("startup.lua", "w+")
+    if not startup_file then
+        return
+    end
+    startup_file:write("shell.run(\"builder_mine\")\n")
+    startup_file:flush()
+    startup_file:close()
+end
 
 function PickUpMachines()
     turtle.select(REDSTONE_SLOT)
