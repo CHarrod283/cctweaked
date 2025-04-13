@@ -11,7 +11,7 @@ function Main(player_detector, proximity, timeout)
     expect(3, timeout, "number")
     while true do
         os.sleep(timeout)
-        if not player_detector.isPlayerInRange(20, "WoodArrow") then
+        if not player_detector.isPlayerInRange(proximity, "WoodArrow") then
             
             redstone.setOutput("top", false)
         else
