@@ -6,7 +6,7 @@ use tracing::{error, info};
 
 
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 struct InventoryReport {
     common_name: String,
     computer_id: i64,
@@ -15,14 +15,14 @@ struct InventoryReport {
     inventory_type: InventoryType,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 struct InventoryItem {
     slot: i64,
     name: String,
     count: i64,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 enum InventoryType {
     #[serde(rename = "input")]
     Input{
@@ -53,15 +53,15 @@ async fn main() {
     });
 }
 
-async fn print_json(axum::Json(json): axum::Json<serde_json::Value>) -> (StatusCode, Option<String>) {
+async fn print_json(axum::Json(json): axum::Json<serde_json::Value>) -> (StatusCode, String) {
     match serde_json::from_value::<InventoryReport>(json) {
         Ok(report) => {
             info!("deserialized report: {:?}", report);
-            (StatusCode::OK, None)
+            (StatusCode::OK, "Ok".to_string())
         }
         Err(e) => {
             error!("Failed to serialize JSON: {}", e);
-            (StatusCode::BAD_REQUEST, Some(format!("Failed to serialize JSON: {}", e)))
+            (StatusCode::BAD_REQUEST, format!("Failed to serialize JSON: {}", e))
         }
     }
 }
@@ -94,7 +94,7 @@ mod tests {
             serialized,
             r#"{"common_name":"Test Computer","computer_id":12345,"inventory":[{"slot":1,"name":"Test Item","count":10}],"peripheral_name":"Test Peripheral","inventory_type":{"input":{"destination":"Test Destination"}}}"#
         );
-        
+
         let report = InventoryReport {
             common_name: "Test Computer".to_string(),
             computer_id: 12345,
@@ -108,7 +108,7 @@ mod tests {
             peripheral_name: "Test Peripheral".to_string(),
             inventory_type: InventoryType::Storage
         };
-        
+
         let serialized = serde_json::to_string(&report).unwrap();
         assert_eq!(
             serialized,
