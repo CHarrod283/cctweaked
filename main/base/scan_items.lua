@@ -41,7 +41,7 @@ end
 
 function GetStoragePeripheral(name, type)
     expect(1, name, "string")
-    expect(2, type, "boolean")
+    expect(2, type, "string")
 
     local peripheral = peripheral.wrap(name)
     peripheral.peripheral_name = name
