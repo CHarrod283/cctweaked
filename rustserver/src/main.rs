@@ -54,13 +54,18 @@ async fn main() {
 }
 
 async fn print_json(axum::Json(json): axum::Json<serde_json::Value>) -> (StatusCode, String) {
-    match serde_json::from_value::<InventoryReport>(json) {
+    match serde_json::from_value::<InventoryReport>(json.clone()) {
         Ok(report) => {
             info!("deserialized report: {:?}", report);
             (StatusCode::OK, "Ok".to_string())
         }
         Err(e) => {
-            error!("Failed to serialize JSON: {}", e);
+            error!("Failed to deserialize JSON: {}", e);
+            let pretty = serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
+                error!("Failed to serialize JSON: {}", e);
+                "Failed to serialize JSON".to_string()
+            });
+            error!("Failed to deserialize JSON: {}", pretty);
             (StatusCode::BAD_REQUEST, format!("Failed to serialize JSON: {}", e))
         }
     }

@@ -40,8 +40,9 @@ function SerializeInventory(inventory)
         local data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"destination\":" .. inventory.destination .."\"}},"
     elseif inventory.inventory_type == "output" then
         local data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"source\":" .. inventory.source .."\"}},"
+    else 
+        print("Bad inventory type", inventory.inventory_type)
     end
-    local data = data .. "\"inventory_type\":\"".. inventory.inventory_type .. "\","
 
     local data = data .. "\"inventory\":["
     for k,v in pairs(inventory.list()) do
