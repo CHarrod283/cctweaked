@@ -30,7 +30,7 @@ end
 
 function SerializeInventory(inventory)
     expect(1, inventory, "table")
-    local data = "{\"peripheral_name\": \"" .. inventory.peripheral_name .. "\",\"computer_id\": " .. inventory.computer_id .. ",\"inventory_type\":".. inventory.inventory_type .. "\", \"inventory\":["
+    local data = "{\"peripheral_name\": \"" .. inventory.peripheral_name .. "\",\"computer_id\": " .. inventory.computer_id .. " ,\"inventory_type\":\"".. inventory.inventory_type .. "\", \"inventory\":["
     
     for k,v in pairs(inventory.list()) do
         data = data.. "{\"slot\": " .. k ..", \"name\":\"" .. v.name .. "\", \"count\": ".. v.count .. "},"
