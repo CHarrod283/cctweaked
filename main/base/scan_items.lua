@@ -31,20 +31,20 @@ end
 function SerializeInventory(inventory)
     expect(1, inventory, "table")
     local data = "{"
-    local data = data .. "\"common_name\":\"" .. inventory.common_name .. "\","
-    local data = data .. "\"peripheral_name\": \"" .. inventory.peripheral_name .. "\","
-    local data = data .. "\"computer_id\":" .. inventory.computer_id .. ","
+    data = data .. "\"common_name\":\"" .. inventory.common_name .. "\","
+    data = data .. "\"peripheral_name\": \"" .. inventory.peripheral_name .. "\","
+    data = data .. "\"computer_id\":" .. inventory.computer_id .. ","
     if inventory.inventory_type == "storage" then
-        local data = data .. "\"inventory_type\":\"".. inventory.inventory_type .. "\","
+        data = data .. "\"inventory_type\":\"".. inventory.inventory_type .. "\","
     elseif inventory.inventory_type == "input" then
-        local data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"destination\":" .. inventory.destination .."\"}},"
+        data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"destination\":" .. inventory.destination .."\"}},"
     elseif inventory.inventory_type == "output" then
-        local data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"source\":" .. inventory.source .."\"}},"
+        data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"source\":" .. inventory.source .."\"}},"
     else 
         print("Bad inventory type", inventory.inventory_type)
     end
 
-    local data = data .. "\"inventory\":["
+    data = data .. "\"inventory\":["
     for k,v in pairs(inventory.list()) do
         data = data.. "{\"slot\":" .. k ..",\"name\":\"" .. v.name .. "\", \"count\":".. v.count .. "},"
     end
