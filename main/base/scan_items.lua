@@ -21,6 +21,7 @@ function Main(input_storage_drawer)
                 break
             elseif event == "http_failure" then
                 print("FAIL http")
+                break
             end
         end
     end
@@ -29,7 +30,7 @@ end
 
 function SerializeInventory(inventory)
     expect(1, inventory, "table")
-    local data = "{\"peripheral_name\": \"" .. inventory.peripheral_name .. "\",\"computer_id\": " .. inventory.computer_id .. ", \"inventory\":["
+    local data = "{\"peripheral_name\": \"" .. inventory.peripheral_name .. "\",\"computer_id\": " .. inventory.computer_id .. ",\"inventory_type\":".. inventory.inventory_type .. "\", \"inventory\":["
     
     for k,v in pairs(inventory.list()) do
         data = data.. "{\"slot\": " .. k ..", \"name\":\"" .. v.name .. "\", \"count\": ".. v.count .. "},"
@@ -46,6 +47,7 @@ function GetStoragePeripheral(name, type)
     local peripheral = peripheral.wrap(name)
     peripheral.peripheral_name = name
     peripheral.computer_id = os.getComputerID()
+    peripheral.inventory_type = type
     return peripheral
 end
 
