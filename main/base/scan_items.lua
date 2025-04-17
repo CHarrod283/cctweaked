@@ -31,6 +31,7 @@ end
 function SerializeInventory(inventory)
     expect(1, inventory, "table")
     local data = "{"
+    local data = data .. "\"common_name\":\"" .. inventory.common_name .. "\","
     local data = data .. "\"peripheral_name\": \"" .. inventory.peripheral_name .. "\","
     local data = data .. "\"computer_id\":" .. inventory.computer_id .. ","
     if inventory.inventory_type == "storage" then
@@ -51,37 +52,39 @@ function SerializeInventory(inventory)
     return data
 end
 
-function GetStoragePeripheral(name)
-    expect(1, name, "string")
+function GetStoragePeripheral(common_name, peripheral_name)
+    expect(1, common_name, "string")
+    expect(2, peripheral_name, "string")
 
-    local peripheral = peripheral.wrap(name)
-    peripheral.peripheral_name = name
+    local peripheral = peripheral.wrap(peripheral_name)
+    peripheral.peripheral_name = peripheral_name
+    peripheral.common_name = common_name
     peripheral.computer_id = os.getComputerID()
     peripheral.inventory_type = "storage"
     return peripheral
 end
 
-function GetStorageInputPeripheral(name, destination)
-    expect(1, name, "string")
+function GetStorageInputPeripheral(common_name, peripheral_name, destination)
+    expect(1, common_name, "string")
+    expect(2, peripheral_name, "string")
+    expect(3, destination, "string")
 
-    local peripheral = peripheral.wrap(name)
-    peripheral.peripheral_name = name
-    peripheral.computer_id = os.getComputerID()
+    local peripheral = GetStoragePeripheral(common_name, peripheral_name)
     peripheral.inventory_type = "input"
     peripheral.destination = destination
     return peripheral
 end
 
 
-function GetStorageOutputPeripheral(name, source)
-    expect(1, name, "string")
+function GetStorageOutputPeripheral(common_name, peripheral_name, source)
+    expect(1, common_name, "string")
+    expect(2, peripheral_name, "string")
+    expect(3, source, "string")
 
-    local peripheral = peripheral.wrap(name)
-    peripheral.peripheral_name = name
-    peripheral.computer_id = os.getComputerID()
+    local peripheral = GetStoragePeripheral(common_name, peripheral_name)
     peripheral.inventory_type = "output"
     peripheral.source = source
     return peripheral
 end
 
-Main(GetStoragePeripheral("functionalstorage:controller_extension_0"))
+Main(GetStorageInputPeripheral("MiningInput", "functionalstorage:controller_extension_0", "MainStorage"))
