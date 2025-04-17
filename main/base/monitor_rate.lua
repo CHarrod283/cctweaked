@@ -28,13 +28,14 @@ function Main(input_storage, monitor, iteration_speed, redstone)
             monitor.setCursorPos(working_box_x * box_x + 1, working_box_y  + 2)
             monitor.write("|")
             local formatted_data = string.format("%s = %d", v.name, v.count)
+            monitor.write(formatted_data)
             for i = #formatted_data, box_x - 1, 1 do
                 monitor.write(" ")
             end
             monitor.write("|")
 
 
-            monitor.setCursorPos(working_box_x * box_x + 1, working_box_y + 1)
+            monitor.setCursorPos(working_box_x * box_x + 1, working_box_y + 3)
             monitor.write("+")
             for i = 2, box_x - 1, 1 do
                 monitor.write("-")
@@ -50,3 +51,4 @@ function Main(input_storage, monitor, iteration_speed, redstone)
 end
 
 
+Main(peripheral.wrap("functionalstorage:controller_extension_0", peripheral.find("monitor"), 1, {}))
