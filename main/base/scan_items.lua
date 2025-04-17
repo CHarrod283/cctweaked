@@ -37,9 +37,9 @@ function SerializeInventory(inventory)
     if inventory.inventory_type == "storage" then
         data = data .. "\"inventory_type\":\"".. inventory.inventory_type .. "\","
     elseif inventory.inventory_type == "input" then
-        data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"destination\":" .. inventory.destination .."\"}},"
+        data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"destination\":\"" .. inventory.destination .."\"}},"
     elseif inventory.inventory_type == "output" then
-        data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"source\":" .. inventory.source .."\"}},"
+        data = data .. "\"inventory_type\":{\"".. inventory.inventory_type .. "\": {\"source\":\"" .. inventory.source .."\"}},"
     else 
         print("Bad inventory type", inventory.inventory_type)
     end
