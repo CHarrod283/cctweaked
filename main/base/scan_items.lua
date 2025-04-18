@@ -8,7 +8,7 @@ function Main(input_storage_drawer)
     expect(1, input_storage_drawer, "table")
 
     while true do
-        os.sleep(1)
+        os.sleep(5)
         local serialized_inventory = SerializeInventory(input_storage_drawer)
         local headers = {
             ["content-type"] = "application/json"
