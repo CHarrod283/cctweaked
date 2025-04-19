@@ -55,7 +55,15 @@ function SendInventory(input_storage)
     local headers = {
         ["content-type"] = "application/json"
     }
-    http.request("http://127.0.0.1:3000", serialized_inventory, headers, false, "POST", 2)
+    http.request{
+        url = "http://127.0.0.1:3000",
+        body = serialized_inventory,
+        headers = headers,
+        binary = false,
+        method = "POST",
+        redirect = false,
+        timeout = 2,
+    }
 end
 
 --[[
