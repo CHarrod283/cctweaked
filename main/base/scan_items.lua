@@ -9,8 +9,9 @@ function Main(input_storage, monitor)
 
 
     local publish_data_timer_id
-    local websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
+    local websocket_reconnect_timer_id
     local ws_handle
+    http.websocketAsync("ws://127.0.0.1:3000/ws/monitor", {}, 2)
     while true do
         local eventData = {os.pullEventRaw()}
         local event = eventData[1]
