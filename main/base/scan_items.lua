@@ -1,30 +1,77 @@
-
-
-
-
 local expect = require "cc.expect"
 
-function Main(input_storage_drawer)
-    expect(1, input_storage_drawer, "table")
+PUBLISH_DATA_TIME = 5
+WEBSOCKET_RECONNECT_TIME = 5
 
+function Main(input_storage, monitor)
+    expect(1, input_storage, "table")
+    expect(2, monitor, "table")
+
+
+    local publish_data_timer_id = os.startTimer(PUBLISH_DATA_TIME)
+    local websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
+    local ws_handle
     while true do
-        os.sleep(5)
-        local serialized_inventory = SerializeInventory(input_storage_drawer)
-        local headers = {
-            ["content-type"] = "application/json"
-        }
-        http.request("http://127.0.0.1:3000", serialized_inventory, headers)
-        while true do
-            local eventData = {os.pullEvent()}
-            local event = eventData[1]
-            if event == "http_success" then
-                break
-            elseif event == "http_failure" then
-                print("FAIL http")
-                break
+        local eventData = {os.pullEventRaw()}
+        local event = eventData[1]
+
+        if event == "timer" and eventData[2] == publish_data_timer_id then
+            SendInventory(input_storage)
+        elseif event == "timer" and eventData[2] == websocket_reconnect_timer_id then
+            http.websocketAsync("ws://127.0.0.1:3000/ws/console")
+        elseif event == "http_success" then
+            print("SUCCESS http", eventData[2], eventData[3])
+            publish_data_timer_id = os.startTimer(PUBLISH_DATA_TIME)
+        elseif event == "http_failure" then
+            print("FAIL http", eventData[2], eventData[3])
+            publish_data_timer_id = os.startTimer(PUBLISH_DATA_TIME)
+        elseif event == "websocket_failure" then
+            print("FAIL websocket", eventData[2], eventData[3])
+            websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
+        elseif event == "websocket_closed" then
+            print("CLOSED websocket", eventData[2], eventData[3], eventData[4])
+            websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
+        elseif event == "websocket_message" then
+            print("MESSAGE websocket", eventData[2], eventData[3])
+        elseif event == "websocket_success" then
+            ws_handle = eventData[3]
+            SendMonitorSize(ws_handle, monitor)
+        elseif event == "monitor_resize" then
+            print("RESIZE monitor", eventData[2])
+            SendMonitorSize(ws_handle, monitor)
+        elseif event == "terminate" then
+            print("TERMINATE")
+            if ws_handle then
+                ws_handle.close()
             end
+            os.exit()
         end
     end
+end
+
+function SendInventory(input_storage)
+    local eventData = {os.pullEvent()}
+    local serialized_inventory = SerializeInventory(input_storage)
+    local headers = {
+        ["content-type"] = "application/json"
+    }
+    http.request("http://127.0.0.1:3000", serialized_inventory, headers)
+end
+
+--[[
+    Sends the size of the monitor to the websocket server, clears the monitor, and sets the text scale and cursor pos
+    @param ws_handle: The websocket handle
+    @param monitor: The monitor peripheral
+]]--
+function SendMonitorSize(ws_handle, monitor)
+    monitor.setTextScale(0.5)
+    monitor.setCursorPos(1, 1)
+    monitor.setTextColor(colors.white)
+    monitor.setBackgroundColor(colors.black)
+    monitor.clear()
+    local width, height = monitor.getSize()
+    local data = "{\"monitor_resize\":{\"width\":" .. width .. ",\"height\":" .. height .. "}}"
+    ws_handle.send(data)
 end
 
 
@@ -88,4 +135,7 @@ function GetStorageOutputPeripheral(common_name, peripheral_name, source)
     return peripheral
 end
 
-Main(GetStorageInputPeripheral("MiningInput", "functionalstorage:controller_extension_0", "MainStorage"))
+Main(
+    GetStorageInputPeripheral("MiningInput", "functionalstorage:controller_extension_0", "MainStorage"),
+    peripheral.find("monitor")
+)

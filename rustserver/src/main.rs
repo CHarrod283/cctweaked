@@ -2,20 +2,23 @@ use std::fmt::{Debug, Display};
 use axum::extract::{ConnectInfo, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{Router, ServiceExt};
+use axum::{Error, Router, ServiceExt};
 use axum::routing::{any, get, post};
 use axum_extra::TypedHeader;
 use ratatui::backend::{Backend, ClearType, WindowSize};
 use ratatui::buffer::Cell;
-use ratatui::DefaultTerminal;
+use ratatui::{DefaultTerminal, Terminal};
 use ratatui::layout::{Position, Size};
 use core::net::SocketAddr;
-use std::sync::Mutex;
-use axum::extract::ws::{Utf8Bytes, WebSocket};
+use std::sync::{Arc, Mutex, MutexGuard};
+use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
+use futures::{StreamExt, SinkExt};
+use futures::stream::{SplitSink, SplitStream};
 use ratatui::crossterm::queue;
 use ratatui::prelude::{Color, Modifier};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use tokio::select;
 use tracing::{error, info};
 
 
@@ -35,6 +38,9 @@ struct InventoryItem {
     name: String,
     count: i64,
 }
+
+
+
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 enum InventoryType {
@@ -56,7 +62,7 @@ async fn main() {
     let app = Router::new()
         .route("/", get(|| async {"hello world"}))
         .route("/", post(print_json))
-        .route("/ws/console", any(terminal_handler));
+        .route("/ws/monitor", any(terminal_handler));
 
     let listener =  tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap_or_else(|e| {
         error!("Failed to bind to address: {}", e);
@@ -96,7 +102,7 @@ async fn terminal_handler(
     } else {
         String::from("Unknown browser")
     };
-    println!("`{user_agent}` at {addr} connected.");
+    info!("`{user_agent}` at {addr} connected.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
     ws.on_upgrade(move |socket| handle_socket(socket, addr))
@@ -104,16 +110,137 @@ async fn terminal_handler(
 
 async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     // Handle the WebSocket connection here
-    println!("WebSocket connection established with {addr}");
+    info!("WebSocket connection established with {addr}");
     // You can send and receive messages using the `socket` object
     // For example, you can send a message to the client:
-    if let Err(e) = socket.send(axum::extract::ws::Message::Text(Utf8Bytes::from_static("Hello from server!"))).await {
-        error!("Failed to send message: {}", e);
+    
+    let (event_writer, event_receiver) = tokio::sync::mpsc::unbounded_channel::<CCTweakedMonitorBackendEvent>();
+    let terminal_backend = Arc::new(Mutex::new(CCTweakedMonitorBackend {
+        event_writer: event_writer.clone(),
+        size: None,
+    }));
+    let (socket_sender, socket_receiver) = socket.split();
+    
+    let input_handler = MonitorInputHandler {
+        socket_reader: socket_receiver,
+        terminal_backend: terminal_backend.clone(),
+    };
+    tokio::spawn(async move {
+        input_handler.handle_inbound().await;
+    });
+    
+    let output_handler = MonitorOutputHandler {
+        socket_writer: socket_sender,
+        event_receiver,
+    };
+    tokio::spawn(async move {
+        output_handler.handle_outbound().await;
+    });
+}
+
+/// MonitorInputHandler is responsible for receiving inbound events from minecraft entities
+struct MonitorInputHandler {
+    socket_reader: SplitStream<WebSocket>,
+    terminal_backend: Arc<Mutex<CCTweakedMonitorBackend>>
+}
+
+impl MonitorInputHandler {
+
+    async fn handle_inbound(mut self) {
+        loop {
+            let msg = self.socket_reader.next().await;
+            let Some(msg) = msg else {
+                info!("WebSocket connection closed");
+                return;
+            };
+            let Ok(msg) = msg.map_err(|e| {
+                error!("Axum failed receiving message: {}", e);
+            }) else {
+                continue;
+            };
+            match msg {
+                Message::Text(text) => {
+                    info!("Received text message: {}", text);
+                    let Ok(event) = serde_json::from_str::<CCTweakedMonitorInputEvent>(&text).map_err(|e| {
+                        error!("Failed to deserialize message: {}", e);
+                    }) else {
+                        continue;
+                    };
+                    match event {
+                        CCTweakedMonitorInputEvent::MonitorResize(size) => {
+                            info!("Received monitor resize event: {:?}", size);
+                            let Ok(mut guard) = self.terminal_backend.lock()
+                                .map_err(|e| error!("Poisoned thread: {}", e
+                            )) else {
+                                return;
+                            };
+                            guard.size = Some(size);
+                        }
+                    }
+                }
+                Message::Binary(data) => {
+                    error!("Unable to handle binary message: {:?}", data);
+                    continue
+                }
+                Message::Close(frame) => {
+                    info!("WebSocket connection closed: {:?}", frame);
+                    return;
+                }
+                _ => {}
+            }
+        }
+
     }
 }
 
+/// MonitorOutputHandler is responsible for sending events to the minecraft entities
+struct MonitorOutputHandler {
+    // sends events to the terminal via websocket
+    socket_writer: SplitSink<WebSocket, Message>,
+    event_receiver: tokio::sync::mpsc::UnboundedReceiver<CCTweakedMonitorBackendEvent>,
+}
 
-enum CCTweakedConsoleBackendEvent {
+
+impl MonitorOutputHandler {
+    async fn handle_outbound(mut self) {
+        loop {
+            let Some(event) = self.event_receiver.recv().await else {
+                info!("Monitor Backend Connection closed");
+                return;
+            };
+            let Ok(data) = serde_json::to_string(&event).map_err(|e| {
+                error!("Failed to serialize event: {}", e);
+            }) else {
+                continue;
+            };
+            if !data.is_ascii() {
+                error!("Non-ASCII data generated: {:?}", data);
+                continue;
+            }
+            let Ok(()) = self.socket_writer.send(Message::Text(Utf8Bytes::from(data))).await.map_err(|e| {
+                error!("Failed to send event: {}", e);
+            }) else {
+                continue;
+            };
+        }
+    }
+
+}
+
+
+
+
+/// Messages sent from the monitor to the server
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum CCTweakedMonitorInputEvent {
+    #[serde(rename = "monitor_resize")]
+    MonitorResize(Size)
+}
+
+
+/// Messages sent from the server to the monitor
+#[derive(Debug, Clone, Serialize, Deserialize)]
+enum CCTweakedMonitorBackendEvent {
     HideCursor,
     ShowCursor,
     ClearLine,
@@ -175,13 +302,15 @@ impl TryFrom<Color> for CCTweakedColor {
     }
 }
 
-struct CCTweakedConsoleBackend {
-    event_writer: tokio::sync::mpsc::UnboundedSender<CCTweakedConsoleBackendEvent>,
-    size: Mutex<Size>,
+struct CCTweakedMonitorBackend {
+    event_writer: tokio::sync::mpsc::UnboundedSender<CCTweakedMonitorBackendEvent>,
+    // size of the terminal, none if we haven't setup the monitor yet
+    size: Option<Size>,
 }
 
 
-impl Backend for CCTweakedConsoleBackend {
+impl Backend for CCTweakedMonitorBackend {
+    
     fn draw<'a, I>(&mut self, content: I) -> std::io::Result<()>
     where
         I: Iterator<Item=(u16, u16, &'a Cell)>
@@ -193,11 +322,11 @@ impl Backend for CCTweakedConsoleBackend {
                 continue;
             }
             // Move the cursor if the previous location was not (x - 1, y)
-            self.event_writer.send(CCTweakedConsoleBackendEvent::SetCursorPosition(Position { x, y })).map_err(|e| {
+            self.event_writer.send(CCTweakedMonitorBackendEvent::SetCursorPosition(Position { x, y })).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
             })?;
             if cell.fg != fg || cell.bg != bg {
-                self.event_writer.send(CCTweakedConsoleBackendEvent::SetTextColor(
+                self.event_writer.send(CCTweakedMonitorBackendEvent::SetTextColor(
                     CCTweakedColor::try_from(cell.fg).unwrap_or_else(|e|{
                         error!("Failed to convert color: {}", e);
                         CCTweakedColor::White
@@ -205,7 +334,7 @@ impl Backend for CCTweakedConsoleBackend {
                 )).map_err(|e| {
                     std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
                 })?;
-                self.event_writer.send(CCTweakedConsoleBackendEvent::SetBackgroundColor(
+                self.event_writer.send(CCTweakedMonitorBackendEvent::SetBackgroundColor(
                     CCTweakedColor::try_from(cell.bg).unwrap_or_else(|e|{
                         error!("Failed to convert color: {}", e);
                         CCTweakedColor::Black
@@ -220,7 +349,7 @@ impl Backend for CCTweakedConsoleBackend {
             if !cell.symbol().is_ascii() {
                 return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Non-ASCII character: {}", cell.symbol())));
             }
-            self.event_writer.send(CCTweakedConsoleBackendEvent::WriteText(cell.symbol().to_string())).map_err(|e| {
+            self.event_writer.send(CCTweakedMonitorBackendEvent::WriteText(cell.symbol().to_string())).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
             })?;
         }
@@ -229,13 +358,13 @@ impl Backend for CCTweakedConsoleBackend {
     }
 
     fn hide_cursor(&mut self) -> std::io::Result<()> {
-        self.event_writer.send(CCTweakedConsoleBackendEvent::HideCursor).map_err(|e| {
+        self.event_writer.send(CCTweakedMonitorBackendEvent::HideCursor).map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
         })
     }
 
     fn show_cursor(&mut self) -> std::io::Result<()> {
-        self.event_writer.send(CCTweakedConsoleBackendEvent::ShowCursor).map_err(|e| {
+        self.event_writer.send(CCTweakedMonitorBackendEvent::ShowCursor).map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
         })
     }
@@ -245,13 +374,13 @@ impl Backend for CCTweakedConsoleBackend {
     }
 
     fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> std::io::Result<()> {
-        self.event_writer.send(CCTweakedConsoleBackendEvent::SetCursorPosition(position.into())).map_err(|e| {
+        self.event_writer.send(CCTweakedMonitorBackendEvent::SetCursorPosition(position.into())).map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
         })
     }
 
     fn clear(&mut self) -> std::io::Result<()> {
-        self.event_writer.send(CCTweakedConsoleBackendEvent::ClearScreen).map_err(|e| {
+        self.event_writer.send(CCTweakedMonitorBackendEvent::ClearScreen).map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
         })
     }
@@ -259,7 +388,7 @@ impl Backend for CCTweakedConsoleBackend {
     fn clear_region(&mut self, clear_type: ClearType) -> std::io::Result<()> {
         match clear_type {
             ClearType::All => self.clear(),
-            ClearType::CurrentLine => self.event_writer.send(CCTweakedConsoleBackendEvent::ClearLine).map_err(|e| {
+            ClearType::CurrentLine => self.event_writer.send(CCTweakedMonitorBackendEvent::ClearLine).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
             }),
             ClearType::AfterCursor => unimplemented!("Not supported by cctweaked"),
@@ -269,14 +398,10 @@ impl Backend for CCTweakedConsoleBackend {
     }
 
     fn size(&self) -> std::io::Result<Size> {
-        self.size.lock().map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to lock size: {}", e))
-        }).map(|size| {
-            Size {
-                width: size.width,
-                height: size.height,
-            }
-        })
+        let Some(size) = self.size else {
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Size not set"));
+        };
+        Ok(size)
     }
 
     fn window_size(&mut self) -> std::io::Result<WindowSize> {
@@ -336,6 +461,13 @@ mod tests {
         assert_eq!(
             serialized,
             r#"{"common_name":"Test Computer","computer_id":12345,"inventory":[{"slot":1,"name":"Test Item","count":10}],"peripheral_name":"Test Peripheral","inventory_type":"storage"}"#
+        );
+        
+        let monitor_resize = CCTweakedMonitorInputEvent::MonitorResize(Size { width: 10, height: 20 });
+        let serialized = serde_json::to_string(&monitor_resize).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"monitor_resize":{"width":10,"height":20}}"#
         );
     }
 }
