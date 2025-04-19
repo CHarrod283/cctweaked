@@ -6,7 +6,11 @@ WEBSOCKET_RECONNECT_TIME = 5
 function Main(input_storage, monitor)
     expect(1, input_storage, "table")
     expect(2, monitor, "table")
-
+    monitor.clear()
+    monitor.setTextScale(1)
+    monitor.setCursorPos(1, 1)
+    monitor.setTextColor(colors.white)
+    monitor.setBackgroundColor(colors.black)
 
     local publish_data_timer_id
     local websocket_reconnect_timer_id
@@ -90,11 +94,6 @@ end
     @param monitor: The monitor peripheral
 ]]--
 function SendMonitorSize(ws_handle, monitor)
-    monitor.setTextScale(0.5)
-    monitor.setCursorPos(1, 1)
-    monitor.setTextColor(colors.white)
-    monitor.setBackgroundColor(colors.black)
-    monitor.clear()
     local width, height = monitor.getSize()
     local data = "{\"monitor_resize\":{\"width\":" .. width .. ",\"height\":" .. height .. "}}"
     ws_handle.send(data)

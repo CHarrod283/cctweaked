@@ -258,6 +258,7 @@ impl MonitorOutputHandler {
                 info!("Monitor Backend Connection closed");
                 return;
             };
+            info!("Sending event: {:?}", event);
             let Ok(data) = serde_json::to_string(&event).map_err(|e| {
                 error!("Failed to serialize event: {}", e);
             }) else {
