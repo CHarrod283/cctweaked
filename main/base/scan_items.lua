@@ -48,7 +48,6 @@ function Main(input_storage, monitor)
 end
 
 function SendInventory(ws_handle, input_storage)
-    local eventData = {os.pullEvent()}
     local serialized_inventory = SerializeInventory(input_storage)
     ws_handle.send(serialized_inventory)
 end
