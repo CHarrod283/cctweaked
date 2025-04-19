@@ -16,7 +16,7 @@ function Main(input_storage, monitor)
         local event = eventData[1]
 
         if event == "timer" and eventData[2] == publish_data_timer_id then
-            SendInventory(input_storage)
+            SendInventory(ws_handle, input_storage)
         elseif event == "timer" and eventData[2] == websocket_reconnect_timer_id then
             http.websocketAsync("ws://127.0.0.1:3000/ws/monitor", {}, 2)
         elseif event == "websocket_failure" then
