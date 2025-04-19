@@ -187,7 +187,11 @@ async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBa
 }
 
 fn render(frame: &mut Frame, i: i32) {
-    frame.render_widget(format!("Hello, world! {}", i), frame.area());
+    if i % 5 == 0 {
+        frame.render_widget(format!("Wooo Hoo {}", i), frame.area());
+    } else {
+        frame.render_widget(format!("Hello, world! {}", i), frame.area());
+    }
 }
 
 /// MonitorInputHandler is responsible for receiving inbound events from minecraft entities
@@ -518,6 +522,7 @@ impl Backend for CCTweakedMonitorBackend {
 
 #[cfg(test)]
 mod tests {
+    use ratatui::backend::TestBackend;
     use super::*;
 
     #[test]
@@ -570,5 +575,15 @@ mod tests {
             serialized,
             r#"{"monitor_resize":{"width":10,"height":20}}"#
         );
+    }
+    
+    #[test]
+    fn test_render() {
+        let mut terminal = Terminal::new(TestBackend::new(20, 20)).unwrap();
+        terminal.draw(| f| render(f, 1)).unwrap();
+        terminal.draw(|f| render(f, 2)).unwrap();
+        terminal.draw(|f| render(f, 5)).unwrap();
+        terminal.draw(|f| render(f, 6)).unwrap();
+        println!("Done")
     }
 }
