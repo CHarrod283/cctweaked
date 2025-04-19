@@ -45,8 +45,12 @@ function Main(input_storage, monitor)
             SendMonitorSize(ws_handle, monitor)
         elseif event == "terminate" then
             print("TERMINATE")
-            os.cancelTimer(publish_data_timer_id)
-            os.cancelTimer(websocket_reconnect_timer_id)
+            if publish_data_timer_id then
+                os.cancelTimer(publish_data_timer_id)
+            end
+            if websocket_reconnect_timer_id then
+                os.cancelTimer(websocket_reconnect_timer_id)
+            end
             if ws_handle then
                 ws_handle.close()
             end
