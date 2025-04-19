@@ -1,7 +1,5 @@
 use std::thread::sleep;
 use std::time::Duration;
-use ratatui::crossterm::event;
-use ratatui::crossterm::event::Event;
 use ratatui::{DefaultTerminal, Frame, Terminal};
 use ratatui::backend::CrosstermBackend;
 

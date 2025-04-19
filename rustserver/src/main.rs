@@ -166,7 +166,6 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
 async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBackend>>>) {
     let mut i = 0;
     loop {
-        i+=1;
         tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         let mut guard = terminal.lock().await;
         let Ok(_frame) = guard.draw(|frame| render(frame, i) ).map_err(|e| {
@@ -182,15 +181,16 @@ async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBa
         }) else {
             return;
         };
+        i+=1
     }
 
 }
 
 fn render(frame: &mut Frame, i: i32) {
     if i % 5 == 0 {
-        frame.render_widget(format!("Wooo Hoo {}", i), frame.area());
+        frame.render_widget(format!("Woo hoo {i}"), frame.area());
     } else {
-        frame.render_widget(format!("Hello, world! {}", i), frame.area());
+        frame.render_widget(format!("Hello world {i}"), frame.area());
     }
 }
 
@@ -263,12 +263,6 @@ impl MonitorOutputHandler {
                 info!("Monitor Backend Connection closed");
                 return;
             };
-            if let CCTweakedMonitorBackendEvent::WriteText(ref text) = event {
-                if text.trim().is_empty() {
-                    info!("Skipping empty text event");
-                    continue;
-                }
-            }
             info!("Sending event: {:?}", event);
             let Ok(data) = serde_json::to_string(&event).map_err(|e| {
                 error!("Failed to serialize event: {}", e);
