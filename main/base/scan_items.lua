@@ -8,7 +8,7 @@ function Main(input_storage, monitor)
     expect(2, monitor, "table")
 
 
-    local publish_data_timer_id = os.startTimer(PUBLISH_DATA_TIME)
+    local publish_data_timer_id
     local websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
     local ws_handle
     while true do
@@ -19,12 +19,6 @@ function Main(input_storage, monitor)
             SendInventory(input_storage)
         elseif event == "timer" and eventData[2] == websocket_reconnect_timer_id then
             http.websocketAsync("ws://127.0.0.1:3000/ws/monitor", {}, 2)
-        elseif event == "http_success" then
-            print("SUCCESS http", eventData[2], eventData[3])
-            publish_data_timer_id = os.startTimer(PUBLISH_DATA_TIME)
-        elseif event == "http_failure" then
-            print("FAIL http", eventData[2], eventData[3])
-            publish_data_timer_id = os.startTimer(PUBLISH_DATA_TIME)
         elseif event == "websocket_failure" then
             print("FAIL websocket", eventData[2], eventData[3])
             websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
@@ -36,6 +30,8 @@ function Main(input_storage, monitor)
         elseif event == "websocket_success" then
             ws_handle = eventData[3]
             SendMonitorSize(ws_handle, monitor)
+            SendInventory(ws_handle, input_storage)
+            publish_data_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
         elseif event == "monitor_resize" then
             print("RESIZE monitor", eventData[2])
             SendMonitorSize(ws_handle, monitor)
@@ -49,21 +45,10 @@ function Main(input_storage, monitor)
     end
 end
 
-function SendInventory(input_storage)
+function SendInventory(ws_handle, input_storage)
     local eventData = {os.pullEvent()}
     local serialized_inventory = SerializeInventory(input_storage)
-    local headers = {
-        ["content-type"] = "application/json"
-    }
-    http.request{
-        url = "http://127.0.0.1:3000",
-        body = serialized_inventory,
-        headers = headers,
-        binary = false,
-        method = "POST",
-        redirect = false,
-        timeout = 2,
-    }
+    ws_handle.send(serialized_inventory)
 end
 
 --[[
@@ -85,7 +70,7 @@ end
 
 function SerializeInventory(inventory)
     expect(1, inventory, "table")
-    local data = "{"
+    local data = "{\"inventory\":{"
     data = data .. "\"common_name\":\"" .. inventory.common_name .. "\","
     data = data .. "\"peripheral_name\": \"" .. inventory.peripheral_name .. "\","
     data = data .. "\"computer_id\":" .. inventory.computer_id .. ","
@@ -104,7 +89,7 @@ function SerializeInventory(inventory)
         data = data.. "{\"slot\":" .. k ..",\"name\":\"" .. v.name .. "\", \"count\":".. v.count .. "},"
     end
     data = string.sub(data, 1, #data - 1)
-    data = data .. "]}"
+    data = data .. "]}}"
     return data
 end
 

@@ -61,7 +61,6 @@ async fn main() {
     tracing_subscriber::fmt::init();
     let app = Router::new()
         .route("/", get(|| async {"hello world"}))
-        .route("/", post(print_json))
         .route("/ws/monitor", any(terminal_handler));
 
     let listener =  tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap_or_else(|e| {
@@ -176,6 +175,9 @@ impl MonitorInputHandler {
                             };
                             guard.size = Some(size);
                         }
+                        CCTweakedMonitorInputEvent::InventoryReport(report) => {
+                            info!("Received inventory report: {:?}", report);
+                        }
                     }
                 }
                 Message::Binary(data) => {
@@ -234,7 +236,9 @@ impl MonitorOutputHandler {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 enum CCTweakedMonitorInputEvent {
     #[serde(rename = "monitor_resize")]
-    MonitorResize(Size)
+    MonitorResize(Size),
+    #[serde(rename = "inventory_report")]
+    InventoryReport(InventoryReport)
 }
 
 
