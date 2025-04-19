@@ -6,6 +6,7 @@
       <sourceFolder url="file://$MODULE_DIR$/rustserver/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/local_terminal/target" />
       <excludeFolder url="file://$MODULE_DIR$/rustserver/target" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
