@@ -7,18 +7,19 @@ use axum::routing::{any, get, post};
 use axum_extra::TypedHeader;
 use ratatui::backend::{Backend, ClearType, WindowSize};
 use ratatui::buffer::Cell;
-use ratatui::{DefaultTerminal, Terminal};
+use ratatui::{DefaultTerminal, Frame, Terminal};
 use ratatui::layout::{Position, Size};
 use core::net::SocketAddr;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc};
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
 use futures::{StreamExt, SinkExt};
 use futures::stream::{SplitSink, SplitStream};
 use ratatui::crossterm::queue;
-use ratatui::prelude::{Color, Modifier};
+use ratatui::prelude::{Color, Modifier, Widget};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::select;
+use tokio::sync::Mutex;
 use tracing::{error, info};
 
 
@@ -73,23 +74,6 @@ async fn main() {
     });
 }
 
-async fn print_json(axum::Json(json): axum::Json<serde_json::Value>) -> (StatusCode, String) {
-    match serde_json::from_value::<InventoryReport>(json.clone()) {
-        Ok(report) => {
-            info!("deserialized report: {:?}", report);
-            (StatusCode::OK, "Ok".to_string())
-        }
-        Err(e) => {
-            error!("Failed to deserialize JSON: {}", e);
-            let pretty = serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
-                error!("Failed to serialize JSON: {}", e);
-                "Failed to serialize JSON".to_string()
-            });
-            error!("Failed to deserialize JSON: {}", pretty);
-            (StatusCode::BAD_REQUEST, format!("Failed to serialize JSON: {}", e))
-        }
-    }
-}
 
 async fn terminal_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -107,27 +91,61 @@ async fn terminal_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, addr))
 }
 
-async fn handle_socket(socket: WebSocket, addr: SocketAddr) {
+async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     // Handle the WebSocket connection here
     info!("WebSocket connection established with {addr}");
     // You can send and receive messages using the `socket` object
     // For example, you can send a message to the client:
-    
+
     let (event_writer, event_receiver) = tokio::sync::mpsc::unbounded_channel::<CCTweakedMonitorBackendEvent>();
-    let terminal_backend = Arc::new(Mutex::new(CCTweakedMonitorBackend {
+    let Some(initial_monitor_size) = socket.recv().await else {
+        error!("Didnt receive initial monitor size");
+        return;
+    };
+    let Ok(initial_monitor_size) = initial_monitor_size.map_err(|e| {
+        error!("Failed to receive initial monitor size: {}", e);
+    }) else {
+        return;
+    };
+    let Ok(initial_monitor_size) = initial_monitor_size.into_text().map_err(|e| {
+        error!("Failed to convert initial monitor size to text: {}", e);
+    }) else {
+        return;
+    };
+    let Ok(initial_monitor_size) = serde_json::from_str::<CCTweakedMonitorInputEvent>(initial_monitor_size.as_str()).map_err(|e| {
+        error!("Failed to deserialize input event: {}", e);
+    }) else {
+        return;
+    };
+    let size = match initial_monitor_size {
+        CCTweakedMonitorInputEvent::MonitorResize(size) => size,
+        _ => {
+            error!("Expected monitor resize event, got: {:?}", initial_monitor_size);
+            return;
+        }
+    };
+        
+    let terminal_backend = CCTweakedMonitorBackend {
         event_writer: event_writer.clone(),
-        size: None,
-    }));
+        size,
+    };
+    let Ok(terminal) = Terminal::new(terminal_backend).map_err(|e| {
+        error!("Failed to create terminal: {}", e);
+    }) else {
+        return;
+    };
     let (socket_sender, socket_receiver) = socket.split();
-    
+
+    let terminal = Arc::new(Mutex::new(terminal));
+
     let input_handler = MonitorInputHandler {
         socket_reader: socket_receiver,
-        terminal_backend: terminal_backend.clone(),
+        terminal: terminal.clone(),
     };
     tokio::spawn(async move {
         input_handler.handle_inbound().await;
     });
-    
+
     let output_handler = MonitorOutputHandler {
         socket_writer: socket_sender,
         event_receiver,
@@ -135,12 +153,46 @@ async fn handle_socket(socket: WebSocket, addr: SocketAddr) {
     tokio::spawn(async move {
         output_handler.handle_outbound().await;
     });
+    
+    tokio::spawn(async move {
+        write_hello_to_terminal(terminal.clone()).await;
+    });
+
+}
+
+async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBackend>>>) {
+    let mut i = 0;
+    loop {
+        i+=1;
+        let mut guard = terminal.lock().await;
+        let Ok(_) = guard.draw(|frame| render(frame, i) ).map_err(|e| {
+            let message = format!("{}", e);
+            if message.contains("channel closed") {
+                return // normal disconnect
+            }
+            error!("Failed to draw to terminal: {}", e);
+        }) else {
+            return;
+        };
+        let Ok(()) = guard.flush().map_err(|e| {
+            error!("Failed to flush terminal: {}", e);
+        }) else {
+            return;
+        };
+        drop(guard);
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    }
+    
+}
+
+fn render(frame: &mut Frame, i: i32) {
+    frame.render_widget(format!("Hello, world! {}", i), frame.area());
 }
 
 /// MonitorInputHandler is responsible for receiving inbound events from minecraft entities
 struct MonitorInputHandler {
     socket_reader: SplitStream<WebSocket>,
-    terminal_backend: Arc<Mutex<CCTweakedMonitorBackend>>
+    terminal: Arc<Mutex<Terminal<CCTweakedMonitorBackend>>>
 }
 
 impl MonitorInputHandler {
@@ -152,8 +204,8 @@ impl MonitorInputHandler {
                 info!("WebSocket connection closed");
                 return;
             };
-            let Ok(msg) = msg.map_err(|e| {
-                error!("Axum failed receiving message: {}", e);
+            let Ok(msg) = msg.map_err(|_e| {
+                info!("WebSocket connection closed"); //cctweaked isnt nice when closing websockets and just sends a stream reset, causing an error
             }) else {
                 continue;
             };
@@ -168,12 +220,8 @@ impl MonitorInputHandler {
                     match event {
                         CCTweakedMonitorInputEvent::MonitorResize(size) => {
                             info!("Received monitor resize event: {:?}", size);
-                            let Ok(mut guard) = self.terminal_backend.lock()
-                                .map_err(|e| error!("Poisoned thread: {}", e
-                            )) else {
-                                return;
-                            };
-                            guard.size = Some(size);
+                            let mut guard = self.terminal.lock().await;
+                            guard.backend_mut().size = size;
                         }
                         CCTweakedMonitorInputEvent::InventoryReport(report) => {
                             info!("Received inventory report: {:?}", report);
@@ -220,9 +268,13 @@ impl MonitorOutputHandler {
                 continue;
             }
             let Ok(()) = self.socket_writer.send(Message::Text(Utf8Bytes::from(data))).await.map_err(|e| {
+                let message = format!("{}", e);
+                if message.contains("closed connection") {
+                    return
+                }
                 error!("Failed to send event: {}", e);
             }) else {
-                continue;
+                return;
             };
         }
     }
@@ -309,12 +361,12 @@ impl TryFrom<Color> for CCTweakedColor {
 struct CCTweakedMonitorBackend {
     event_writer: tokio::sync::mpsc::UnboundedSender<CCTweakedMonitorBackendEvent>,
     // size of the terminal, none if we haven't setup the monitor yet
-    size: Option<Size>,
+    size: Size,
 }
 
 
 impl Backend for CCTweakedMonitorBackend {
-    
+
     fn draw<'a, I>(&mut self, content: I) -> std::io::Result<()>
     where
         I: Iterator<Item=(u16, u16, &'a Cell)>
@@ -322,6 +374,16 @@ impl Backend for CCTweakedMonitorBackend {
         let mut fg = Color::White;
         let mut bg = Color::Black;
         for (x, y, cell) in content {
+            let cell_fg = if cell.fg != Color::Reset {
+                cell.fg
+            } else {
+                Color::White
+            };
+            let cell_bg = if cell.bg != Color::Reset {
+                cell.bg
+            } else {
+                Color::Black
+            };
             if cell.skip {
                 continue;
             }
@@ -329,7 +391,7 @@ impl Backend for CCTweakedMonitorBackend {
             self.event_writer.send(CCTweakedMonitorBackendEvent::SetCursorPosition(Position { x, y })).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
             })?;
-            if cell.fg != fg || cell.bg != bg {
+            if cell_fg != fg || cell_bg != bg {
                 self.event_writer.send(CCTweakedMonitorBackendEvent::SetTextColor(
                     CCTweakedColor::try_from(cell.fg).unwrap_or_else(|e|{
                         error!("Failed to convert color: {}", e);
@@ -402,10 +464,7 @@ impl Backend for CCTweakedMonitorBackend {
     }
 
     fn size(&self) -> std::io::Result<Size> {
-        let Some(size) = self.size else {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, "Size not set"));
-        };
-        Ok(size)
+        Ok(self.size)
     }
 
     fn window_size(&mut self) -> std::io::Result<WindowSize> {
@@ -466,7 +525,7 @@ mod tests {
             serialized,
             r#"{"common_name":"Test Computer","computer_id":12345,"inventory":[{"slot":1,"name":"Test Item","count":10}],"peripheral_name":"Test Peripheral","inventory_type":"storage"}"#
         );
-        
+
         let monitor_resize = CCTweakedMonitorInputEvent::MonitorResize(Size { width: 10, height: 20 });
         let serialized = serde_json::to_string(&monitor_resize).unwrap();
         assert_eq!(

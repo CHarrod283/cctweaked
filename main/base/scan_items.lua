@@ -34,7 +34,8 @@ function Main(input_storage, monitor)
             end
             websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
         elseif event == "websocket_message" then
-            print("MESSAGE websocket", eventData[2], eventData[3])
+            --print("MESSAGE websocket", eventData[2], eventData[3])
+            HandleInputMessage(monitor, eventData[3])
         elseif event == "websocket_success" then
             ws_handle = eventData[3]
             SendMonitorSize(ws_handle, monitor)
@@ -56,6 +57,23 @@ function Main(input_storage, monitor)
             end
             return
         end
+    end
+end
+
+function HandleInputMessage(monitor, message)
+    local json = textutils.unserializeJSON(message)
+    if json == nil then
+        print("Bad JSON", message)
+        return
+    end
+    if json["WriteText"] then
+        monitor.write(json["WriteText"])
+    elseif json["SetCursorPosition"] then
+        local x = json["SetCursorPosition"]["x"] + 1 -- rust is 0 indexed
+        local y = json["SetCursorPosition"]["y"] + 1 -- rust is 0 indexed
+        monitor.setCursorPos(x, y)
+    else
+        print("Bad message", message)
     end
 end
 
