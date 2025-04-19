@@ -72,6 +72,8 @@ function HandleInputMessage(monitor, message)
         local x = json["SetCursorPosition"]["x"] + 1 -- rust is 0 indexed
         local y = json["SetCursorPosition"]["y"] + 1 -- rust is 0 indexed
         monitor.setCursorPos(x, y)
+    elseif json == "HideCursor"
+        monitor.serCursorBlink(false)
     else
         print("Bad message", message)
     end
