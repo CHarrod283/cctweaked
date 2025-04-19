@@ -108,7 +108,7 @@ async fn terminal_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, addr))
 }
 
-async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
+async fn handle_socket(socket: WebSocket, addr: SocketAddr) {
     // Handle the WebSocket connection here
     info!("WebSocket connection established with {addr}");
     // You can send and receive messages using the `socket` object

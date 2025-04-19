@@ -18,7 +18,7 @@ function Main(input_storage, monitor)
         if event == "timer" and eventData[2] == publish_data_timer_id then
             SendInventory(input_storage)
         elseif event == "timer" and eventData[2] == websocket_reconnect_timer_id then
-            http.websocketAsync("ws://127.0.0.1:3000/ws/console")
+            http.websocketAsync("ws://127.0.0.1:3000/ws/monitor", {}, 2)
         elseif event == "http_success" then
             print("SUCCESS http", eventData[2], eventData[3])
             publish_data_timer_id = os.startTimer(PUBLISH_DATA_TIME)
@@ -44,7 +44,7 @@ function Main(input_storage, monitor)
             if ws_handle then
                 ws_handle.close()
             end
-            os.exit()
+            return
         end
     end
 end
@@ -55,7 +55,7 @@ function SendInventory(input_storage)
     local headers = {
         ["content-type"] = "application/json"
     }
-    http.request("http://127.0.0.1:3000", serialized_inventory, headers)
+    http.request("http://127.0.0.1:3000", serialized_inventory, headers, false, "POST", 2)
 end
 
 --[[
