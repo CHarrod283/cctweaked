@@ -6,12 +6,9 @@ WEBSOCKET_RECONNECT_TIME = 5
 function Main(input_storage, monitor)
     expect(1, input_storage, "table")
     expect(2, monitor, "table")
-    monitor.clear()
     monitor.setTextScale(1)
-    monitor.setCursorPos(1, 1)
-    monitor.setTextColor(colors.white)
-    monitor.setBackgroundColor(colors.black)
 
+    
     local publish_data_timer_id
     local websocket_reconnect_timer_id
     local ws_handle
@@ -41,6 +38,10 @@ function Main(input_storage, monitor)
             --print("MESSAGE websocket", eventData[2], eventData[3])
             HandleInputMessage(monitor, eventData[3])
         elseif event == "websocket_success" then
+            monitor.clear()
+            monitor.setCursorPos(1, 1)
+            monitor.setTextColor(colors.white)
+            monitor.setBackgroundColor(colors.black)
             ws_handle = eventData[3]
             SendMonitorSize(ws_handle, monitor)
             SendInventory(ws_handle, input_storage)
@@ -77,7 +78,7 @@ function HandleInputMessage(monitor, message)
         local y = json["SetCursorPosition"]["y"] + 1 -- rust is 0 indexed
         monitor.setCursorPos(x, y)
     elseif json == "HideCursor" then
-        monitor.serCursorBlink(false)
+        monitor.setCursorBlink(false)
     else
         print("Bad message", message)
     end

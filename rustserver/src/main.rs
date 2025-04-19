@@ -5,9 +5,9 @@ use axum::response::IntoResponse;
 use axum::{Error, Router, ServiceExt};
 use axum::routing::{any, get, post};
 use axum_extra::TypedHeader;
-use ratatui::backend::{Backend, ClearType, WindowSize};
+use ratatui::backend::{Backend, ClearType, CrosstermBackend, WindowSize};
 use ratatui::buffer::Cell;
-use ratatui::{DefaultTerminal, Frame, Terminal};
+use ratatui::{DefaultTerminal, Frame, Terminal, TerminalOptions};
 use ratatui::layout::{Position, Size};
 use core::net::SocketAddr;
 use std::sync::{Arc};
@@ -21,8 +21,9 @@ use thiserror::Error;
 use tokio::select;
 use tokio::sync::Mutex;
 use tracing::{error, info};
-
-
+use tracing::instrument::WithSubscriber;
+use std::io::{stdout, BufWriter, Stdout, Write};
+use ratatui::crossterm::terminal::enable_raw_mode;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 struct InventoryReport {
@@ -128,12 +129,14 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     let terminal_backend = CCTweakedMonitorBackend {
         event_writer: event_writer.clone(),
         size,
+        current_word: None,
     };
     let Ok(terminal) = Terminal::new(terminal_backend).map_err(|e| {
         error!("Failed to create terminal: {}", e);
     }) else {
         return;
     };
+    
     let (socket_sender, socket_receiver) = socket.split();
 
     let terminal = Arc::new(Mutex::new(terminal));
@@ -153,7 +156,7 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     tokio::spawn(async move {
         output_handler.handle_outbound().await;
     });
-    
+
     tokio::spawn(async move {
         write_hello_to_terminal(terminal.clone()).await;
     });
@@ -164,10 +167,10 @@ async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBa
     let mut i = 0;
     loop {
         i+=1;
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         let mut guard = terminal.lock().await;
-        let Ok(_) = guard.draw(|frame| render(frame, i) ).map_err(|e| {
-            let message = format!("{}", e);
-            if message.contains("channel closed") {
+        let Ok(_frame) = guard.draw(|frame| render(frame, i) ).map_err(|e| {
+            if e.to_string().contains("channel closed") {
                 return // normal disconnect
             }
             error!("Failed to draw to terminal: {}", e);
@@ -179,10 +182,8 @@ async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBa
         }) else {
             return;
         };
-        drop(guard);
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
     }
-    
+
 }
 
 fn render(frame: &mut Frame, i: i32) {
@@ -258,6 +259,12 @@ impl MonitorOutputHandler {
                 info!("Monitor Backend Connection closed");
                 return;
             };
+            if let CCTweakedMonitorBackendEvent::WriteText(ref text) = event {
+                if text.trim().is_empty() {
+                    info!("Skipping empty text event");
+                    continue;
+                }
+            }
             info!("Sending event: {:?}", event);
             let Ok(data) = serde_json::to_string(&event).map_err(|e| {
                 error!("Failed to serialize event: {}", e);
@@ -363,8 +370,24 @@ struct CCTweakedMonitorBackend {
     event_writer: tokio::sync::mpsc::UnboundedSender<CCTweakedMonitorBackendEvent>,
     // size of the terminal, none if we haven't setup the monitor yet
     size: Size,
+    current_word: Option<BufWriter<Vec<u8>>>
 }
 
+impl CCTweakedMonitorBackend {
+    fn flush_word(&mut self) -> std::io::Result<()> {
+        if let Some(word) = self.current_word.take() {
+            let bytes = word.into_inner()?;
+            let word = String::from_utf8(bytes).map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to convert bytes to string: {}", e))
+            })?;
+            info!("Flushing word: \"{}\"", word);
+            self.event_writer.send(CCTweakedMonitorBackendEvent::WriteText(word)).map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
+            })?;
+        }
+        Ok(())
+    }
+}
 
 impl Backend for CCTweakedMonitorBackend {
 
@@ -374,7 +397,16 @@ impl Backend for CCTweakedMonitorBackend {
     {
         let mut fg = Color::White;
         let mut bg = Color::Black;
+        let mut last_pos: Option<Position> = None;
         for (x, y, cell) in content {
+            // Move the cursor if the previous location was not (x - 1, y)
+            if !matches!(last_pos, Some(p) if x == p.x + 1 && y == p.y) {
+                self.flush_word()?;
+                self.event_writer.send(CCTweakedMonitorBackendEvent::SetCursorPosition(Position { x, y })).map_err(|e| {
+                    std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
+                })?;
+            }
+            last_pos = Some(Position { x, y });
             let cell_fg = if cell.fg != Color::Reset {
                 cell.fg
             } else {
@@ -385,14 +417,10 @@ impl Backend for CCTweakedMonitorBackend {
             } else {
                 Color::Black
             };
-            if cell.skip {
-                continue;
-            }
             // Move the cursor if the previous location was not (x - 1, y)
-            self.event_writer.send(CCTweakedMonitorBackendEvent::SetCursorPosition(Position { x, y })).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
-            })?;
+
             if cell_fg != fg || cell_bg != bg {
+                self.flush_word()?;
                 self.event_writer.send(CCTweakedMonitorBackendEvent::SetTextColor(
                     CCTweakedColor::try_from(cell.fg).unwrap_or_else(|e|{
                         error!("Failed to convert color: {}", e);
@@ -416,9 +444,19 @@ impl Backend for CCTweakedMonitorBackend {
             if !cell.symbol().is_ascii() {
                 return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Non-ASCII character: {}", cell.symbol())));
             }
-            self.event_writer.send(CCTweakedMonitorBackendEvent::WriteText(cell.symbol().to_string())).map_err(|e| {
-                std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
-            })?;
+            if self.current_word.is_none() {
+                self.current_word = Some(BufWriter::new(vec![]));
+            }
+            match self.current_word {
+                Some(ref mut writer) => {
+                    if let Err(e) = write!(writer, "{}", cell.symbol()) {
+                        return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to write to word: {}", e)));
+                    }
+                }
+                None => {
+                    unreachable!("current_word should never be None here");
+                }
+            }
         }
 
         Ok(())
@@ -473,8 +511,7 @@ impl Backend for CCTweakedMonitorBackend {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        // No-op since sending events in handled by websocket
-        Ok(())
+        self.flush_word()
     }
 }
 
