@@ -72,7 +72,7 @@ end
 
 function SerializeInventory(inventory)
     expect(1, inventory, "table")
-    local data = "{\"inventory\":{"
+    local data = "{\"inventory_report\":{"
     data = data .. "\"common_name\":\"" .. inventory.common_name .. "\","
     data = data .. "\"peripheral_name\": \"" .. inventory.peripheral_name .. "\","
     data = data .. "\"computer_id\":" .. inventory.computer_id .. ","
