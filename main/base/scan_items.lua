@@ -23,9 +23,15 @@ function Main(input_storage, monitor)
             http.websocketAsync("ws://127.0.0.1:3000/ws/monitor", {}, 2)
         elseif event == "websocket_failure" then
             print("FAIL websocket", eventData[2], eventData[3])
+            if publish_data_timer_id then
+                os.cancelTimer(publish_data_timer_id)
+            end
             websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
         elseif event == "websocket_closed" then
             print("CLOSED websocket", eventData[2], eventData[3], eventData[4])
+            if publish_data_timer_id then
+                os.cancelTimer(publish_data_timer_id)
+            end
             websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
         elseif event == "websocket_message" then
             print("MESSAGE websocket", eventData[2], eventData[3])
@@ -39,6 +45,8 @@ function Main(input_storage, monitor)
             SendMonitorSize(ws_handle, monitor)
         elseif event == "terminate" then
             print("TERMINATE")
+            os.cancelTimer(publish_data_timer_id)
+            os.cancelTimer(websocket_reconnect_timer_id)
             if ws_handle then
                 ws_handle.close()
             end
