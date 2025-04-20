@@ -78,7 +78,7 @@ function HandleInputMessage(monitor, message)
 
     local json = textutils.unserializeJSON(string.sub(message, #OTHER_PATTERN, #message))
     if json == nil then
-        print("Bad JSON", message)
+        print("Bad JSON", string.sub(message, #OTHER_PATTERN, #message))
         return
     end
     if json["SetCursorPosition"] then
