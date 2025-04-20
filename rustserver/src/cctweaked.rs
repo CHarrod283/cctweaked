@@ -4,7 +4,7 @@ use ratatui::backend::{Backend, ClearType, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
 use ratatui::prelude::Color;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 use crate::{InventoryReport};
 use std::io::Write;
 use std::sync::Arc;
@@ -75,13 +75,26 @@ impl MonitorOutputHandler {
                 info!("Monitor Backend Connection closed");
                 return;
             };
-            info!("Sending event: {:?}", event);
-            let Ok(data) = serde_json::to_string(&event).map_err(|e| {
-                error!("Failed to serialize event: {}", e);
-            }) else {
-                continue;
+            let message = match event {
+                CCTweakedMonitorBackendEvent::WriteText(word) => {
+                    let Ok(word) = translate_to_cctweaked(&word).map_err(|e| {
+                        error!("Failed to translate word: {}", e);
+                    }) else {
+                        continue;
+                    };
+                    Message::Binary(word.into())
+                }
+                e => {
+                    let Ok(data) = serde_json::to_string(&e).map_err(|e| {
+                        error!("Failed to serialize event: {}", e);
+                    }) else {
+                        continue;
+                    };
+                    Message::Text(Utf8Bytes::from(data))
+                }
             };
-            let Ok(()) = self.socket_writer.send(Message::Text(Utf8Bytes::from(data))).await.map_err(|e| {
+            
+            let Ok(()) = self.socket_writer.send(message).await.map_err(|e| {
                 let message = format!("{}", e);
                 if message.contains("closed connection") {
                     return
@@ -93,6 +106,38 @@ impl MonitorOutputHandler {
         }
     }
 
+}
+
+
+fn translate_to_cctweaked(word: &str) -> Result<Vec<u8>, CharTranslationError> {
+    let mut result = Vec::new();
+    for c in word.chars() {
+        if let Some(byte) = translate_char_to_cctweaked_byte(c) {
+            result.push(byte);
+        } else {
+            return Err(CharTranslationError(c));
+        }
+    }
+    Ok(result)
+}
+
+fn translate_char_to_cctweaked_byte(c: char) -> Option<u8> {
+    if c.is_ascii() {
+        return Some(c as u8);
+    }
+    // Handle special characters
+    match c {
+        _ => None
+    }
+}
+
+#[derive(Debug, Clone, Copy, Error)]
+struct CharTranslationError(char);
+
+impl Display for CharTranslationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Failed to translate character: {:?}", self.0)
+    }
 }
 
 

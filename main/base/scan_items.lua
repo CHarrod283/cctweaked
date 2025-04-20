@@ -36,7 +36,11 @@ function Main(input_storage, monitor)
             websocket_reconnect_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
         elseif event == "websocket_message" then
             --print("MESSAGE websocket", eventData[2], eventData[3])
-            HandleInputMessage(monitor, eventData[3])
+            if eventData[4] then
+                HandleBinaryMessage(monitor, eventData[3])
+            else
+                HandleTextMessage(monitor, eventData[3])
+            end
         elseif event == "websocket_success" then
             monitor.clear()
             monitor.setCursorPos(1, 1)
@@ -65,15 +69,13 @@ function Main(input_storage, monitor)
     end
 end
 
-function HandleInputMessage(monitor, message)
+function HandleTextMessage(monitor, message)
     local json = textutils.unserializeJSON(message)
     if json == nil then
         print("Bad JSON", message)
         return
     end
-    if json["WriteText"] then
-        monitor.write(json["WriteText"])
-    elseif json["SetCursorPosition"] then
+    if json["SetCursorPosition"] then
         local x = json["SetCursorPosition"]["x"] + 1 -- rust is 0 indexed
         local y = json["SetCursorPosition"]["y"] + 1 -- rust is 0 indexed
         monitor.setCursorPos(x, y)
@@ -82,6 +84,10 @@ function HandleInputMessage(monitor, message)
     else
         print("Bad message", message)
     end
+end
+-- binary messages are WRITE messages, since we need to support non-utf8 characters
+function HandleBinaryMessage(monitor, message)
+    monitor.write(message)
 end
 
 function SendInventory(ws_handle, input_storage)
