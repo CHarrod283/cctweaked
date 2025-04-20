@@ -15,7 +15,7 @@ use ratatui::Terminal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
-use crate::inventory_manager::InventoryReport;
+use crate::inventory_manager::{InventoryManager, InventoryReport};
 
 pub struct CCTweakedMonitorBackend {
     event_writer: UnboundedSender<CCTweakedMonitorBackendEvent>,
@@ -466,7 +466,7 @@ impl MonitorInputHandler {
         }
     }
 
-    pub async fn handle_inbound(mut self) {
+    pub async fn handle_inbound(mut self, manager_sender: UnboundedSender<InventoryReport>) {
         loop {
             let msg = self.socket_reader.next().await;
             let Some(msg) = msg else {
@@ -487,6 +487,9 @@ impl MonitorInputHandler {
                         continue;
                     };
                     match event {
+                        CCTweakedMonitorInputEvent::InventoryRegister { .. } => {
+                            error!("Received inventory register after already spawned websocket");
+                        }
                         CCTweakedMonitorInputEvent::MonitorResize(size) => {
                             debug!("Received monitor resize event: {:?}", size);
                             let mut guard = self.terminal.lock().await;
@@ -494,6 +497,9 @@ impl MonitorInputHandler {
                         }
                         CCTweakedMonitorInputEvent::InventoryReport(report) => {
                             debug!("Received inventory report: {:?}", report);
+                            if let Err(e) = manager_sender.send(report) {
+                                error!("Failed to send inventory report: {}", e);
+                            }
                         }
                     }
                 }
@@ -518,6 +524,12 @@ impl MonitorInputHandler {
 /// Messages sent from the monitor to the server
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CCTweakedMonitorInputEvent {
+    #[serde(rename = "inventory_register")]
+    InventoryRegister{
+        size: Size,
+        computer_id: i64,
+        common_name: String,
+    },
     #[serde(rename = "monitor_resize")]
     MonitorResize(Size),
     #[serde(rename = "inventory_report")]

@@ -2,7 +2,7 @@ mod cctweaked;
 pub mod inventory_manager;
 
 use std::fmt::{Debug, Display};
-use axum::extract::{ConnectInfo, WebSocketUpgrade};
+use axum::extract::{ConnectInfo, State, WebSocketUpgrade};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{Error, Router, ServiceExt};
@@ -26,20 +26,30 @@ use tokio::sync::Mutex;
 use tracing::{error, info};
 use tracing::instrument::WithSubscriber;
 use std::io::{stdout, BufWriter, Stdout, Write};
+use std::time::Duration;
 use ratatui::crossterm::terminal::enable_raw_mode;
 use ratatui::symbols::border;
 use ratatui::text::Text;
 use ratatui::widgets::{Block, List};
 use cctweaked::CCTweakedMonitorBackend;
 use crate::cctweaked::{CCTweakedMonitorBackendEvent, CCTweakedMonitorInputEvent, MonitorInputHandler, MonitorOutputHandler};
-
+use crate::inventory_manager::{InventoryManager, InventoryManagerReport, InventoryReport};
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
+    let (manager_sender, manager_receiver) = tokio::sync::mpsc::unbounded_channel::<InventoryReport>();
+    
+    let manager = Arc::new(InventoryManager::new(manager_sender));
+    let manager_clone = manager.clone();
+    tokio::spawn(async move { 
+        manager_clone.run(manager_receiver).await;
+    });
+    
     let app = Router::new()
         .route("/", get(|| async {"hello world"}))
-        .route("/ws/monitor", any(terminal_handler));
+        .route("/ws/monitor", any(terminal_handler))
+        .with_state(manager);
 
     let listener =  tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap_or_else(|e| {
         error!("Failed to bind to address: {}", e);
@@ -56,6 +66,7 @@ async fn terminal_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
+    State(manager): State<Arc<InventoryManager>>,
 ) -> impl IntoResponse {
     let user_agent = if let Some(TypedHeader(user_agent)) = user_agent {
         user_agent.to_string()
@@ -65,10 +76,10 @@ async fn terminal_handler(
     info!("`{user_agent}` at {addr} connected.");
     // finalize the upgrade process by returning upgrade callback.
     // we can customize the callback by sending additional info such as address.
-    ws.on_upgrade(move |socket| handle_socket(socket, addr))
+    ws.on_upgrade(move |socket| handle_socket(socket, addr, manager))
 }
 
-async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
+async fn handle_socket(mut socket: WebSocket, addr: SocketAddr, manager: Arc<InventoryManager>) {
     // Handle the WebSocket connection here
     info!("WebSocket connection established with {addr}");
     // You can send and receive messages using the `socket` object
@@ -94,8 +105,11 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     }) else {
         return;
     };
-    let size = match initial_monitor_size {
-        CCTweakedMonitorInputEvent::MonitorResize(size) => size,
+    let (computer_id, common_name, size) = match initial_monitor_size {
+        CCTweakedMonitorInputEvent::InventoryRegister { size, computer_id, common_name} => {
+            info!("Registering computer id {computer_id} with common name {common_name}");
+            (computer_id, common_name, size)
+        }
         _ => {
             error!("Expected monitor resize event, got: {:?}", initial_monitor_size);
             return;
@@ -119,8 +133,9 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     let (hangup_sender, hangup_receiver) = tokio::sync::oneshot::channel();
 
     let input_handler = MonitorInputHandler::new(socket_receiver, terminal.clone());
+    let manager_sender = manager.get_sender();
     tokio::spawn(async move {
-        input_handler.handle_inbound().await;
+        input_handler.handle_inbound(manager_sender).await;
     });
 
     let output_handler = MonitorOutputHandler::new(event_receiver, socket_sender, hangup_sender);
@@ -129,13 +144,56 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     });
 
     select! {
-        _ = write_hello_to_terminal(terminal.clone()) => {},
+        _ = write_inventory_manager_rate_report_to_terminal(terminal.clone(), manager, computer_id, common_name) => {},
         _ = hangup_receiver => {
             info!("Hangup received, closing terminal");
         }
     }
 
 
+}
+
+
+async fn write_inventory_manager_rate_report_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBackend>>>, manager: Arc<InventoryManager>, computer_id: i64, common_name: String) {
+    let mut timer = tokio::time::interval(Duration::from_millis(1000));
+    loop {
+        timer.tick().await;
+        let Some(report) = manager.get_report(computer_id, Duration::from_secs(5 * 60)).await else {
+            error!("Failed to get rate report for computer id {computer_id}");
+            continue;
+        };
+        let display = match report {
+            InventoryManagerReport::Input(r) => {
+                List::new(r.iter().map(|item| {
+                    let text = Text::raw(format!("{}: {}", item.name, item.rate_per_second));
+                    text
+                })).block(Block::bordered().title(format!("{} Input", common_name)))
+            }
+            InventoryManagerReport::Output(r)  => {
+                List::new(r.iter().map(|item| {
+                    let text = Text::raw(format!("{}: {}", item.name, item.rate_per_second));
+                    text
+                })).block(Block::bordered().title(format!("{} Output", common_name)))
+            }
+            InventoryManagerReport::Storage(r) => {
+                List::new(r.iter().map(|item| {
+                    let text = Text::raw(format!("{}: {}", item.name, item.count));
+                    text
+                })).block(Block::bordered().title("Storage"))
+            }
+        };
+        let mut guard = terminal.lock().await;
+        let Ok(_frame) = guard.draw(|frame| {
+            frame.render_widget(display, frame.area());
+        }).map_err(|e| {
+            if e.to_string().contains("channel closed") {
+                return // normal disconnect
+            }
+            error!("Failed to draw to terminal: {}", e);
+        }) else {
+            return;
+        };
+    }
 }
 
 async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBackend>>>) {

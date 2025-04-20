@@ -1,5 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 
@@ -52,19 +53,21 @@ type InventoryReports = VecDeque<(Instant, InventoryReport)>;
 
 pub struct InventoryManager {
     inventory_reports: RwLock<(ComputerIds,InventoryReports)>,
+    // used so that we can clone the sender
+    sender: UnboundedSender<InventoryReport>,
 }
 
-impl Default for InventoryManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl InventoryManager {
-    pub fn new() -> Self {
+    pub fn new(sender: UnboundedSender<InventoryReport>) -> Self {
         Self {
             inventory_reports: RwLock::new((Vec::new(), VecDeque::new())),
+            sender,
         }
+    }
+    
+    pub fn get_sender(&self) -> UnboundedSender<InventoryReport> {
+        self.sender.clone()
     }
     
     pub async fn run(&self, mut event_receiver: tokio::sync::mpsc::UnboundedReceiver<InventoryReport>) {
@@ -92,18 +95,8 @@ impl InventoryManager {
         }
     }
     
-    pub async fn get_storage_report(&self, computer_id: i64) -> Option<InventoryManagerReport> {
-        let guard = self.inventory_reports.read().await;
-        let report = guard.1.iter().find(|(_, report)| report.computer_id == computer_id)?;
-        let (_, report) = report;
-        if let InventoryType::Storage = report.inventory_type {
-            Some(InventoryManagerReport::Storage(report.inventory.clone()))
-        } else {
-            None
-        }
-    }
     
-    pub async fn get_rate_report(&self, computer_id: i64, over_past: Duration) -> Option<InventoryManagerReport> {
+    pub async fn get_report(&self, computer_id: i64, over_past: Duration) -> Option<InventoryManagerReport> {
         let guard = self.inventory_reports.read().await;
         let mut inventory_rate_map: HashMap<String, f64> = HashMap::new();
         let mut inventory_type = None;
@@ -112,7 +105,9 @@ impl InventoryManager {
         }) {
             if inventory_type.is_none() {
                 match &report.inventory_type {
-                    InventoryType::Storage { .. } => return None, // storage is not supported
+                    InventoryType::Storage => {
+                         return Some(InventoryManagerReport::Storage(report.inventory.clone()))
+                    }, 
                     itype => inventory_type = Some(itype),
                 }
             }
@@ -140,12 +135,6 @@ impl InventoryManager {
         }
             
     }
-}
-
-fn time_within(time: &Instant, duration: Duration) -> bool {
-    let now = Instant::now();
-    let elapsed = now.duration_since(*time);
-    elapsed < duration
 }
 
 
@@ -204,6 +193,17 @@ mod tests {
         assert_eq!(
             serialized,
             r#"{"monitor_resize":{"width":10,"height":20}}"#
+        );
+        
+        let inventory_Register = CCTweakedMonitorInputEvent::InventoryRegister {
+            size: Size { width: 10, height: 20 },
+            computer_id: 0,
+            common_name: "123".to_string(),
+        };
+        let serialized = serde_json::to_string(&inventory_Register).unwrap();
+        assert_eq!(
+            serialized,
+            r#"{"inventory_register":{"size":{"width":10,"height":20},"computer_id":0,"common_name":"123"}}"#
         );
     }
 }

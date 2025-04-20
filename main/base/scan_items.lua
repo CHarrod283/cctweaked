@@ -47,7 +47,7 @@ function Main(input_storage, monitor)
             monitor.setTextColor(colors.white)
             monitor.setBackgroundColor(colors.black)
             ws_handle = eventData[3]
-            SendMonitorSize(ws_handle, monitor)
+            RegisterMonitor(ws_handle, monitor)
             SendInventory(ws_handle, input_storage)
             publish_data_timer_id = os.startTimer(WEBSOCKET_RECONNECT_TIME)
         elseif event == "monitor_resize" then
@@ -103,6 +103,18 @@ end
 function SendMonitorSize(ws_handle, monitor)
     local width, height = monitor.getSize()
     local data = "{\"monitor_resize\":{\"width\":" .. width .. ",\"height\":" .. height .. "}}"
+    ws_handle.send(data)
+end
+
+
+function RegisterMonitor(ws_handle, monitor)
+    expect(1, ws_handle, "table")
+    expect(2, monitor, "table")
+    --"{"inventory_register":{"size":{"width":10,"height":20},"computer_id":0,"common_name":"123"}}"
+    local width, height = monitor.getSize()
+    local data = "{\"inventory_register\":{\"size\":{\"width\":" .. width .. ",\"height\":" .. height .. "},"
+    data = data .. "\"computer_id\":" .. os.getComputerID() .. ","
+    data = data .. "\"common_name\":\"" .. monitor.getName() .. "\"}}"
     ws_handle.send(data)
 end
 
