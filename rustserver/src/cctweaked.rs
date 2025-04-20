@@ -4,7 +4,7 @@ use ratatui::backend::{Backend, ClearType, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
 use ratatui::prelude::Color;
-use tracing::{error, info, trace};
+use tracing::{debug, error, info, trace};
 use crate::{InventoryReport};
 use std::io::Write;
 use std::sync::Arc;
@@ -44,7 +44,7 @@ impl CCTweakedMonitorBackend {
             let word = String::from_utf8(bytes).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to convert bytes to string: {}", e))
             })?;
-            trace!("Flushing word: \"{}\"", word);
+            debug!("Flushing word: \"{}\"", word);
             self.event_writer.send(CCTweakedMonitorBackendEvent::WriteText(word)).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
             })?;
@@ -478,7 +478,7 @@ impl MonitorInputHandler {
             };
             match msg {
                 Message::Text(text) => {
-                    trace!("Received text message: {}", text);
+                    debug!("Received text message: {}", text);
                     let Ok(event) = serde_json::from_str::<CCTweakedMonitorInputEvent>(&text).map_err(|e| {
                         error!("Failed to deserialize message: {}", e);
                     }) else {
@@ -486,12 +486,12 @@ impl MonitorInputHandler {
                     };
                     match event {
                         CCTweakedMonitorInputEvent::MonitorResize(size) => {
-                            trace!("Received monitor resize event: {:?}", size);
+                            debug!("Received monitor resize event: {:?}", size);
                             let mut guard = self.terminal.lock().await;
                             guard.backend_mut().set_size(size)
                         }
                         CCTweakedMonitorInputEvent::InventoryReport(report) => {
-                            trace!("Received inventory report: {:?}", report);
+                            debug!("Received inventory report: {:?}", report);
                         }
                     }
                 }
