@@ -1,4 +1,5 @@
 mod cctweaked;
+pub mod inventory_manager;
 
 use std::fmt::{Debug, Display};
 use axum::extract::{ConnectInfo, WebSocketUpgrade};
@@ -32,38 +33,6 @@ use ratatui::widgets::{Block, List};
 use cctweaked::CCTweakedMonitorBackend;
 use crate::cctweaked::{CCTweakedMonitorBackendEvent, CCTweakedMonitorInputEvent, MonitorInputHandler, MonitorOutputHandler};
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
-struct InventoryReport {
-    common_name: String,
-    computer_id: i64,
-    inventory: Vec<InventoryItem>,
-    peripheral_name: String,
-    inventory_type: InventoryType,
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
-struct InventoryItem {
-    slot: i64,
-    name: String,
-    count: i64,
-}
-
-
-
-
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
-enum InventoryType {
-    #[serde(rename = "input")]
-    Input{
-        destination: String,
-    },
-    #[serde(rename = "output")]
-    Output{
-        source: String,
-    },
-    #[serde(rename = "storage")]
-    Storage
-}
 
 #[tokio::main]
 async fn main() {
@@ -143,12 +112,12 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     let (socket_sender, socket_receiver) = socket.split();
 
     let terminal = Arc::new(Mutex::new(terminal));
-    
+
     // input and output handlers can see the websocket is closed, but the terminal writer cant,
     // so we need to send a hangup signal to the terminal writer when the websocket is closed to avoid
     // leaking tasks
     let (hangup_sender, hangup_receiver) = tokio::sync::oneshot::channel();
-    
+
     let input_handler = MonitorInputHandler::new(socket_receiver, terminal.clone());
     tokio::spawn(async move {
         input_handler.handle_inbound().await;
@@ -165,7 +134,7 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
             info!("Hangup received, closing terminal");
         }
     }
-        
+
 
 }
 
@@ -221,57 +190,7 @@ mod tests {
     use ratatui::backend::TestBackend;
     use super::*;
 
-    #[test]
-    fn test_serialize() {
-        let report = InventoryReport {
-            common_name: "Test Computer".to_string(),
-            computer_id: 12345,
-            inventory: vec![
-                InventoryItem {
-                    slot: 1,
-                    name: "Test Item".to_string(),
-                    count: 10,
-                },
-            ],
-            peripheral_name: "Test Peripheral".to_string(),
-            inventory_type: InventoryType::Input {
-                destination: "Test Destination".to_string(),
-            },
-        };
-
-        let serialized = serde_json::to_string(&report).unwrap();
-        assert_eq!(
-            serialized,
-            r#"{"common_name":"Test Computer","computer_id":12345,"inventory":[{"slot":1,"name":"Test Item","count":10}],"peripheral_name":"Test Peripheral","inventory_type":{"input":{"destination":"Test Destination"}}}"#
-        );
-
-        let report = InventoryReport {
-            common_name: "Test Computer".to_string(),
-            computer_id: 12345,
-            inventory: vec![
-                InventoryItem {
-                    slot: 1,
-                    name: "Test Item".to_string(),
-                    count: 10,
-                },
-            ],
-            peripheral_name: "Test Peripheral".to_string(),
-            inventory_type: InventoryType::Storage
-        };
-
-        let serialized = serde_json::to_string(&report).unwrap();
-        assert_eq!(
-            serialized,
-            r#"{"common_name":"Test Computer","computer_id":12345,"inventory":[{"slot":1,"name":"Test Item","count":10}],"peripheral_name":"Test Peripheral","inventory_type":"storage"}"#
-        );
-
-        let monitor_resize = CCTweakedMonitorInputEvent::MonitorResize(Size { width: 10, height: 20 });
-        let serialized = serde_json::to_string(&monitor_resize).unwrap();
-        assert_eq!(
-            serialized,
-            r#"{"monitor_resize":{"width":10,"height":20}}"#
-        );
-    }
+    
 
     #[test]
     fn test_render() {

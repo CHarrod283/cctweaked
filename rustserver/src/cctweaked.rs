@@ -5,7 +5,6 @@ use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
 use ratatui::prelude::Color;
 use tracing::{debug, error, info, trace};
-use crate::{InventoryReport};
 use std::io::Write;
 use std::sync::Arc;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket};
@@ -16,6 +15,7 @@ use ratatui::Terminal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{oneshot, Mutex};
+use crate::inventory_manager::InventoryReport;
 
 pub struct CCTweakedMonitorBackend {
     event_writer: UnboundedSender<CCTweakedMonitorBackendEvent>,
@@ -81,6 +81,7 @@ impl MonitorOutputHandler {
         loop {
             let Some(event) = self.event_receiver.recv().await else {
                 info!("Monitor Backend Connection closed");
+                self.hangup.send(WebSocketCloseEvent).ok();
                 return;
             };
             let message = match event {
@@ -110,6 +111,7 @@ impl MonitorOutputHandler {
                 }
                 error!("Failed to send event: {}", e);
             }) else {
+                self.hangup.send(WebSocketCloseEvent).ok();
                 return;
             };
         }
