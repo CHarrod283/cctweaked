@@ -253,6 +253,17 @@ pub const CCTWEAKED_BORDER: border::Set = border::Set {
     horizontal_bottom: "⠉",
 };
 
+pub const CCTWEAKED_ASCII_BORDER: border::Set = border::Set {
+    top_left: "+",
+    top_right: "+",
+    bottom_left: "+",
+    bottom_right: "+",
+    vertical_left: "|",
+    vertical_right: "|",
+    horizontal_top: "-",
+    horizontal_bottom: "-",
+};
+
 #[derive(Debug, Error)]
 pub enum CCTweakedError {
     #[error("Invalid character in CCTweaked text: {0}")]
