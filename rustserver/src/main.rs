@@ -164,25 +164,25 @@ async fn write_inventory_manager_rate_report_to_terminal(terminal: Arc<Mutex<Ter
         };
         let display = match report {
             InventoryManagerReport::Input(mut r) => {
-                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal).reverse());
                 List::new(r.iter().map(|item| {
                     let text = Text::raw(format!("{}: {}", item.name, item.rate_per_second));
                     text
-                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title(format!("{} Input", common_name)))
+                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title(common_name.clone()))
             }
             InventoryManagerReport::Output(mut r)  => {
-                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal).reverse());
                 List::new(r.iter().map(|item| {
                     let text = Text::raw(format!("{}: {}", item.name, item.rate_per_second));
                     text
-                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title(format!("{} Output", common_name)))
+                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title(common_name.clone()))
             }
             InventoryManagerReport::Storage(mut r) => {
-                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal).reverse());
                 List::new(r.iter().map(|item| {
                     let text = Text::raw(format!("{}: {}", item.name, item.count));
                     text
-                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title("Storage"))
+                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title(common_name.clone()))
             }
         };
         let mut guard = terminal.lock().await;

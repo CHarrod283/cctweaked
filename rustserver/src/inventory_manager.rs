@@ -127,6 +127,9 @@ impl InventoryManager {
                 let entry = inventory_rate_map.entry(item.name.clone()).or_insert(0.0);
                 *entry += item.count as f64;
             }
+            if let InventoryType::Storage = report.inventory_type {
+                break; // storage we only care about the most recent report
+            }
         }
 
         match inventory_type {

@@ -482,7 +482,7 @@ impl MonitorInputHandler {
                 Message::Text(text) => {
                     debug!("Received text message: {}", text);
                     let Ok(event) = serde_json::from_str::<CCTweakedMonitorInputEvent>(&text).map_err(|e| {
-                        error!("Failed to deserialize message: {}", e);
+                        error!("Failed to deserialize message: {}| {}", e, text);
                     }) else {
                         continue;
                     };
