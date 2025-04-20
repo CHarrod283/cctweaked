@@ -31,7 +31,7 @@ use ratatui::text::Text;
 use ratatui::widgets::{Block, BorderType, Borders, List};
 use cctweaked::CCTweakedMonitorBackend;
 use crate::cctweaked::{CCTweakedMonitorBackendEvent, CCTweakedMonitorInputEvent, MonitorInputHandler, MonitorOutputHandler};
-use crate::cctweaked::text::{CCTWEAKED_ASCII_BORDER, CCTWEAKED_BORDER};
+use crate::cctweaked::text::CCTWEAKED_BORDER;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 struct InventoryReport {
@@ -183,7 +183,7 @@ async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBa
 fn render(frame: &mut Frame, i: i32) {
     let border = Block::default()
         .borders(Borders::ALL)
-        .border_set(CCTWEAKED_ASCII_BORDER)
+        .border_set(CCTWEAKED_BORDER)
         .title("Hello World");
     let text_wiget = if i % 5 == 0 {
         List::new(Text::raw(format!("woo hoo {}", i)))

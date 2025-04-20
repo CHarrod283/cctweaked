@@ -71,11 +71,9 @@ OTHER_PATTERN = "^OTHER "
 function HandleInputMessage(monitor, message)
     if string.find(message, WRITE_PATTERN) then
         monitor.write(string.sub(message, #WRITE_PATTERN, #message))
-        return
     end
     if not string.find(message, OTHER_PATTERN) then
         print("Weird Message", message)
-        return
     end
 
     local json = textutils.unserializeJSON(string.sub(message, #OTHER_PATTERN, #message))
