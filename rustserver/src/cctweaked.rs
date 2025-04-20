@@ -202,7 +202,6 @@ fn translate_char_to_cctweaked_byte(c: char) -> Option<u8> {
         '¤' => Some(0xa4),
         '¥' => Some(0xa5),
         '¦' => Some(0xa6),
-        '█' => Some(0xa7),
         '¨' => Some(0xa8),
         '©' => Some(0xa9),
         'ª' => Some(0xaa),
