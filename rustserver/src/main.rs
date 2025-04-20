@@ -143,21 +143,29 @@ async fn handle_socket(mut socket: WebSocket, addr: SocketAddr) {
     let (socket_sender, socket_receiver) = socket.split();
 
     let terminal = Arc::new(Mutex::new(terminal));
-
-    // maybe select?
+    
+    // input and output handlers can see the websocket is closed, but the terminal writer cant,
+    // so we need to send a hangup signal to the terminal writer when the websocket is closed to avoid
+    // leaking tasks
+    let (hangup_sender, hangup_receiver) = tokio::sync::oneshot::channel();
+    
     let input_handler = MonitorInputHandler::new(socket_receiver, terminal.clone());
     tokio::spawn(async move {
         input_handler.handle_inbound().await;
     });
 
-    let output_handler = MonitorOutputHandler::new(event_receiver, socket_sender);
+    let output_handler = MonitorOutputHandler::new(event_receiver, socket_sender, hangup_sender);
     tokio::spawn(async move {
         output_handler.handle_outbound().await;
     });
 
-    tokio::spawn(async move {
-        write_hello_to_terminal(terminal.clone()).await;
-    });
+    select! {
+        _ = write_hello_to_terminal(terminal.clone()) => {},
+        _ = hangup_receiver => {
+            info!("Hangup received, closing terminal");
+        }
+    }
+        
 
 }
 

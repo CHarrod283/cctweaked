@@ -15,13 +15,15 @@ use futures::{SinkExt, StreamExt};
 use ratatui::Terminal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 
 pub struct CCTweakedMonitorBackend {
     event_writer: UnboundedSender<CCTweakedMonitorBackendEvent>,
     size: Size,
     current_word: Option<BufWriter<Vec<u8>>>
 }
+
+pub struct WebSocketCloseEvent;
 
 impl CCTweakedMonitorBackend {
     pub fn new(event_writer: UnboundedSender<CCTweakedMonitorBackendEvent>, size: Size) -> Self {
@@ -42,7 +44,7 @@ impl CCTweakedMonitorBackend {
             let word = String::from_utf8(bytes).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to convert bytes to string: {}", e))
             })?;
-            info!("Flushing word: \"{}\"", word);
+            trace!("Flushing word: \"{}\"", word);
             self.event_writer.send(CCTweakedMonitorBackendEvent::WriteText(word)).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
             })?;
@@ -58,14 +60,20 @@ pub struct MonitorOutputHandler {
     // sends events to the terminal via websocket
     socket_writer: SplitSink<WebSocket, Message>,
     event_receiver: UnboundedReceiver<CCTweakedMonitorBackendEvent>,
+    hangup: oneshot::Sender<WebSocketCloseEvent>
 }
 
 
 impl MonitorOutputHandler {
-    pub fn new(event_receiver: UnboundedReceiver<CCTweakedMonitorBackendEvent>, socket_writer: SplitSink<WebSocket, Message>) -> Self {
+    pub fn new(
+        event_receiver: UnboundedReceiver<CCTweakedMonitorBackendEvent>, 
+        socket_writer: SplitSink<WebSocket, Message>,
+        hangup: oneshot::Sender<WebSocketCloseEvent>
+    ) -> Self {
         MonitorOutputHandler {
             socket_writer,
             event_receiver,
+            hangup
         }
     }
     
@@ -96,7 +104,8 @@ impl MonitorOutputHandler {
             
             let Ok(()) = self.socket_writer.send(message).await.map_err(|e| {
                 let message = format!("{}", e);
-                if message.contains("closed connection") {
+                if message.contains("closed connection") || message.contains("channel closed") {
+                    // The connection is closed, so we can just return
                     return
                 }
                 error!("Failed to send event: {}", e);
@@ -388,9 +397,15 @@ impl Backend for CCTweakedMonitorBackend {
     }
 
     fn show_cursor(&mut self) -> std::io::Result<()> {
-        self.event_writer.send(CCTweakedMonitorBackendEvent::ShowCursor).map_err(|e| {
-            std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
-        })
+        let result = self.event_writer.send(CCTweakedMonitorBackendEvent::ShowCursor);
+        if let Err(e) = result {
+            if e.to_string().contains("channel closed") {
+                // The connection is closed, so we can just return
+                return Ok(());
+            }
+            return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e)));
+        }
+        Ok(())
     }
 
     fn get_cursor_position(&mut self) -> std::io::Result<Position> {
@@ -463,7 +478,7 @@ impl MonitorInputHandler {
             };
             match msg {
                 Message::Text(text) => {
-                    info!("Received text message: {}", text);
+                    trace!("Received text message: {}", text);
                     let Ok(event) = serde_json::from_str::<CCTweakedMonitorInputEvent>(&text).map_err(|e| {
                         error!("Failed to deserialize message: {}", e);
                     }) else {
@@ -471,12 +486,12 @@ impl MonitorInputHandler {
                     };
                     match event {
                         CCTweakedMonitorInputEvent::MonitorResize(size) => {
-                            info!("Received monitor resize event: {:?}", size);
+                            trace!("Received monitor resize event: {:?}", size);
                             let mut guard = self.terminal.lock().await;
                             guard.backend_mut().set_size(size)
                         }
                         CCTweakedMonitorInputEvent::InventoryReport(report) => {
-                            info!("Received inventory report: {:?}", report);
+                            trace!("Received inventory report: {:?}", report);
                         }
                     }
                 }
