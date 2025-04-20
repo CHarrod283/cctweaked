@@ -1,12 +1,10 @@
-pub mod text;
-
 use std::fmt::Display;
-use std::io::{BufWriter, Bytes};
+use std::io::BufWriter;
 use ratatui::backend::{Backend, ClearType, WindowSize};
 use ratatui::buffer::Cell;
 use ratatui::layout::{Position, Size};
 use ratatui::prelude::Color;
-use tracing::{error, info, trace, warn};
+use tracing::{error, info};
 use crate::{InventoryReport};
 use std::io::Write;
 use std::sync::Arc;
@@ -33,15 +31,19 @@ impl CCTweakedMonitorBackend {
             current_word: None
         }
     }
-
+    
     pub fn set_size(&mut self, size: Size) {
         self.size = size;
     }
-
+    
     fn flush_word(&mut self) -> std::io::Result<()> {
         if let Some(word) = self.current_word.take() {
             let bytes = word.into_inner()?;
-            self.event_writer.send(CCTweakedMonitorBackendEvent::WriteText(bytes)).map_err(|e| {
+            let word = String::from_utf8(bytes).map_err(|e| {
+                std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to convert bytes to string: {}", e))
+            })?;
+            info!("Flushing word: \"{}\"", word);
+            self.event_writer.send(CCTweakedMonitorBackendEvent::WriteText(word)).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to send event: {}", e))
             })?;
         }
@@ -66,20 +68,24 @@ impl MonitorOutputHandler {
             event_receiver,
         }
     }
-
+    
     pub async fn handle_outbound(mut self) {
         loop {
             let Some(event) = self.event_receiver.recv().await else {
                 info!("Monitor Backend Connection closed");
                 return;
             };
-            trace!("Sending event: {:?}", event);
-            let Ok(data) = event.into_bytes().map_err(|e| {
-                error!("Failed to convert event to bytes: {}", e);
+            info!("Sending event: {:?}", event);
+            let Ok(data) = serde_json::to_string(&event).map_err(|e| {
+                error!("Failed to serialize event: {}", e);
             }) else {
                 continue;
             };
-            let Ok(()) = self.socket_writer.send(Message::Binary(data.into())).await.map_err(|e| {
+            if !data.is_ascii() {
+                error!("Non-ASCII data generated: {:?}", data);
+                continue;
+            }
+            let Ok(()) = self.socket_writer.send(Message::Text(Utf8Bytes::from(data))).await.map_err(|e| {
                 let message = format!("{}", e);
                 if message.contains("closed connection") {
                     return
@@ -145,18 +151,16 @@ impl Backend for CCTweakedMonitorBackend {
                 fg = cell.fg;
                 bg = cell.bg;
             }
-            
+
+            if !cell.symbol().is_ascii() {
+                return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Non-ASCII character: {}", cell.symbol())));
+            }
             if self.current_word.is_none() {
                 self.current_word = Some(BufWriter::new(vec![]));
             }
-            let Ok(cctweaked_symbol) = text::convert_to_cctweaked(cell.symbol()).map_err(|e| {
-                error!("Failed to convert symbol: {}", e);
-            }) else {
-                continue;
-            };
             match self.current_word {
                 Some(ref mut writer) => {
-                    if let Err(e) = writer.write(cctweaked_symbol.as_ref()) {
+                    if let Err(e) = write!(writer, "{}", cell.symbol()) {
                         return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Failed to write to word: {}", e)));
                     }
                 }
@@ -229,7 +233,7 @@ pub struct MonitorInputHandler {
 }
 
 impl MonitorInputHandler {
-
+    
     pub fn new(socket_reader: SplitStream<WebSocket>, terminal: Arc<Mutex<Terminal<CCTweakedMonitorBackend>>>) -> Self {
         MonitorInputHandler {
             socket_reader,
@@ -251,7 +255,7 @@ impl MonitorInputHandler {
             };
             match msg {
                 Message::Text(text) => {
-                    trace!("Received text message: {}", text);
+                    info!("Received text message: {}", text);
                     let Ok(event) = serde_json::from_str::<CCTweakedMonitorInputEvent>(&text).map_err(|e| {
                         error!("Failed to deserialize message: {}", e);
                     }) else {
@@ -259,12 +263,12 @@ impl MonitorInputHandler {
                     };
                     match event {
                         CCTweakedMonitorInputEvent::MonitorResize(size) => {
-                            trace!("Received monitor resize event: {:?}", size);
+                            info!("Received monitor resize event: {:?}", size);
                             let mut guard = self.terminal.lock().await;
                             guard.backend_mut().set_size(size)
                         }
                         CCTweakedMonitorInputEvent::InventoryReport(report) => {
-                            trace!("Received inventory report: {:?}", report);
+                            info!("Received inventory report: {:?}", report);
                         }
                     }
                 }
@@ -306,27 +310,7 @@ pub enum CCTweakedMonitorBackendEvent {
     SetCursorPosition(Position),
     SetTextColor(CCTweakedColor),
     SetBackgroundColor(CCTweakedColor),
-    WriteText(Vec<u8>),
-}
-
-impl CCTweakedMonitorBackendEvent {
-    pub fn into_bytes(self) -> Result<Vec<u8>, std::io::Error> {
-        match self {
-            CCTweakedMonitorBackendEvent::WriteText(data) => {
-                let mut buffer = BufWriter::new(vec![]);
-                buffer.write_all(b"WRITE ")?;
-                buffer.write_all(&data)?;
-                Ok(buffer.into_inner()?)
-            }
-            other => {
-                let mut buffer = BufWriter::new(vec![]);
-                buffer.write_all(b"OTHER ")?;
-                let data = serde_json::to_vec(&other)?;
-                buffer.write_all(&data)?;
-                Ok(buffer.into_inner()?)
-            }
-        }
-    }
+    WriteText(String),
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -386,7 +370,7 @@ impl TryFrom<Color> for CCTweakedColor {
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    
     #[tokio::test]
     async fn test_size() {
         let (writer, _reader) = tokio::sync::mpsc::unbounded_channel();
@@ -398,7 +382,7 @@ mod tests {
         };
         assert_eq!(backend.size().unwrap(), size);
     }
-
+    
     #[tokio::test]
     async fn test_flush() {
         let (writer, mut receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -418,7 +402,7 @@ mod tests {
         assert!(event.is_some());
         match event.unwrap() {
             CCTweakedMonitorBackendEvent::WriteText(text) => {
-                assert_eq!(text, b"Hello");
+                assert_eq!(text, "Hello");
             }
             _ => panic!("Expected WriteText event")
         }

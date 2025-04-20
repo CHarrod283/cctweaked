@@ -26,12 +26,8 @@ use tracing::{error, info};
 use tracing::instrument::WithSubscriber;
 use std::io::{stdout, BufWriter, Stdout, Write};
 use ratatui::crossterm::terminal::enable_raw_mode;
-use ratatui::symbols::border;
-use ratatui::text::Text;
-use ratatui::widgets::{Block, BorderType, Borders, List};
 use cctweaked::CCTweakedMonitorBackend;
 use crate::cctweaked::{CCTweakedMonitorBackendEvent, CCTweakedMonitorInputEvent, MonitorInputHandler, MonitorOutputHandler};
-use crate::cctweaked::text::CCTWEAKED_BORDER;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 struct InventoryReport {
@@ -181,18 +177,11 @@ async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBa
 }
 
 fn render(frame: &mut Frame, i: i32) {
-    let border = Block::default()
-        .borders(Borders::ALL)
-        .border_set(CCTWEAKED_BORDER)
-        .title("Hello World");
-    let text_wiget = if i % 5 == 0 {
-        List::new(Text::raw(format!("woo hoo {}", i)))
+    if i % 5 == 0 {
+        frame.render_widget(format!("Woo hoo {i}"), frame.area());
     } else {
-        List::new(Text::raw(format!("Hello World {}", i)))
-    };
-    let text = text_wiget.block(border);
-    
-    frame.render_widget(text, frame.area());
+        frame.render_widget(format!("Hello world {i}"), frame.area());
+    }
 }
 
 /// MonitorInputHandler is responsible for receiving inbound events from minecraft entities

@@ -65,23 +65,15 @@ function Main(input_storage, monitor)
     end
 end
 
-WRITE_PATTERN = "^WRITE "
-OTHER_PATTERN = "^OTHER "
-
 function HandleInputMessage(monitor, message)
-    if string.find(message, WRITE_PATTERN) then
-        monitor.write(string.sub(message, #WRITE_PATTERN, #message))
-    end
-    if not string.find(message, OTHER_PATTERN) then
-        print("Weird Message", message)
-    end
-
-    local json = textutils.unserializeJSON(string.sub(message, #OTHER_PATTERN, #message))
+    local json = textutils.unserializeJSON(message)
     if json == nil then
         print("Bad JSON", message)
         return
     end
-    if json["SetCursorPosition"] then
+    if json["WriteText"] then
+        monitor.write(json["WriteText"])
+    elseif json["SetCursorPosition"] then
         local x = json["SetCursorPosition"]["x"] + 1 -- rust is 0 indexed
         local y = json["SetCursorPosition"]["y"] + 1 -- rust is 0 indexed
         monitor.setCursorPos(x, y)
