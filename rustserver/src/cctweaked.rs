@@ -81,10 +81,6 @@ impl MonitorOutputHandler {
             }) else {
                 continue;
             };
-            if !data.is_ascii() {
-                error!("Non-ASCII data generated: {:?}", data);
-                continue;
-            }
             let Ok(()) = self.socket_writer.send(Message::Text(Utf8Bytes::from(data))).await.map_err(|e| {
                 let message = format!("{}", e);
                 if message.contains("closed connection") {
@@ -152,9 +148,7 @@ impl Backend for CCTweakedMonitorBackend {
                 bg = cell.bg;
             }
 
-            if !cell.symbol().is_ascii() {
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, format!("Non-ASCII character: {}", cell.symbol())));
-            }
+            
             if self.current_word.is_none() {
                 self.current_word = Some(BufWriter::new(vec![]));
             }

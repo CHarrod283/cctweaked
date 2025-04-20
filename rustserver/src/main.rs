@@ -26,6 +26,9 @@ use tracing::{error, info};
 use tracing::instrument::WithSubscriber;
 use std::io::{stdout, BufWriter, Stdout, Write};
 use ratatui::crossterm::terminal::enable_raw_mode;
+use ratatui::symbols::border;
+use ratatui::text::Text;
+use ratatui::widgets::{Block, List};
 use cctweaked::CCTweakedMonitorBackend;
 use crate::cctweaked::{CCTweakedMonitorBackendEvent, CCTweakedMonitorInputEvent, MonitorInputHandler, MonitorOutputHandler};
 
@@ -177,14 +180,28 @@ async fn write_hello_to_terminal(terminal: Arc<Mutex<Terminal<CCTweakedMonitorBa
 }
 
 fn render(frame: &mut Frame, i: i32) {
-    if i % 5 == 0 {
-        frame.render_widget(format!("Woo hoo {i}"), frame.area());
+    let text = if i % 5 == 0 {
+        Text::raw(format!("Woo Hoo {}", i))
     } else {
-        frame.render_widget(format!("Hello world {i}"), frame.area());
-    }
+        Text::raw(format!("Hello world {}", i))
+    };
+    let table = List::new(vec![text]).block(Block::bordered().border_set(CCTWEAKED_BORDER));
+    frame.render_widget(table, frame.area());
 }
 
 /// MonitorInputHandler is responsible for receiving inbound events from minecraft entities
+
+
+pub const CCTWEAKED_BORDER: border::Set = border::Set {
+    top_left: "+",
+    top_right: "+",
+    bottom_left: "+",
+    bottom_right: "+",
+    vertical_left: "|",
+    vertical_right: "|",
+    horizontal_top: "-",
+    horizontal_bottom: "-",
+};
 
 
 
