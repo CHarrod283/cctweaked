@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
@@ -27,6 +28,12 @@ pub struct InventoryRate {
     pub rate_per_second: f64,
 }
 
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq)]
+pub struct InventoryItemCount {
+    pub name: String,
+    pub count: i64,
+}
+
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq, Eq)]
 pub enum InventoryType {
@@ -45,7 +52,7 @@ pub enum InventoryType {
 pub enum InventoryManagerReport{
     Input(Vec<InventoryRate>),
     Output(Vec<InventoryRate>),
-    Storage(Vec<InventoryItem>),
+    Storage(Vec<InventoryItemCount>),
 }
 
 type ComputerIds = Vec<i64>;
@@ -65,11 +72,11 @@ impl InventoryManager {
             sender,
         }
     }
-    
+
     pub fn get_sender(&self) -> UnboundedSender<InventoryReport> {
         self.sender.clone()
     }
-    
+
     pub async fn run(&self, mut event_receiver: tokio::sync::mpsc::UnboundedReceiver<InventoryReport>) {
         loop {
             let report = event_receiver.recv().await;
@@ -82,7 +89,7 @@ impl InventoryManager {
                 };
                 if back.0 + std::time::Duration::from_secs(60 * 30) > now {
                     break
-                } 
+                }
                 guard.1.pop_back();
             }
             if let Some(report) = report {
@@ -94,21 +101,26 @@ impl InventoryManager {
             }
         }
     }
-    
-    
+
+
     pub async fn get_report(&self, computer_id: i64, over_past: Duration) -> Option<InventoryManagerReport> {
         let guard = self.inventory_reports.read().await;
         let mut inventory_rate_map: HashMap<String, f64> = HashMap::new();
         let mut inventory_type = None;
+        let mut number_of_reports = 0;
         for (_, report) in guard.1.iter().filter(|(time_reported,report)| {
             Instant::now().duration_since(*time_reported) <= over_past && report.computer_id == computer_id
         }) {
-            if inventory_type.is_none() {
-                match &report.inventory_type {
-                    InventoryType::Storage => {
-                         return Some(InventoryManagerReport::Storage(report.inventory.clone()))
-                    }, 
-                    itype => inventory_type = Some(itype),
+            number_of_reports += 1;
+            match inventory_type {
+                None => {
+                    inventory_type = Some(report.inventory_type.clone());
+                }
+                Some(ref mut inventory_type) => {
+                    if *inventory_type != report.inventory_type {
+                        // monitor registered with different inventory type at some point, so discard old reports
+                        break;
+                    }
                 }
             }
             for item in &report.inventory {
@@ -116,27 +128,72 @@ impl InventoryManager {
                 *entry += item.count as f64;
             }
         }
-        let mut inventory_rate = Vec::new();
-        for (name, count) in inventory_rate_map {
-            let rate = count / over_past.as_secs_f64();
-            inventory_rate.push(InventoryRate {
-                name,
-                rate_per_second: rate,
-            });
-        }
+
         match inventory_type {
             Some(InventoryType::Input { .. }) => {
+                let mut inventory_rate = Vec::new();
+                for (name, count) in inventory_rate_map {
+                    let rate = count / number_of_reports as f64 / SECONDS_PER_REPORT as f64;
+                    inventory_rate.push(InventoryRate {
+                        name,
+                        rate_per_second: rate,
+                    });
+                }
                 Some(InventoryManagerReport::Input(inventory_rate))
             }
             Some(InventoryType::Output { .. }) => {
+                let mut inventory_rate = Vec::new();
+                for (name, count) in inventory_rate_map {
+                    let rate = count / number_of_reports as f64 / SECONDS_PER_REPORT as f64;
+                    inventory_rate.push(InventoryRate {
+                        name,
+                        rate_per_second: rate,
+                    });
+                }
                 Some(InventoryManagerReport::Output(inventory_rate))
             }
-            _ => None,
+            Some(InventoryType::Storage) => {
+                let mut inventory_count = Vec::new();
+                for (name, count) in inventory_rate_map {
+                    inventory_count.push(InventoryItemCount {
+                        name,
+                        count: count as i64,
+                    });
+                }
+                Some(InventoryManagerReport::Storage(inventory_count))
+            }
+            None => {
+                // no inventory type found, return None
+                None
+            }
         }
-            
+
     }
 }
 
+impl PartialOrd for InventoryRate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.rate_per_second == other.rate_per_second {
+            return Some(self.name.cmp(&other.name));
+        }
+        if self.rate_per_second > other.rate_per_second {
+            return Some(Ordering::Greater);
+        }
+        Some(Ordering::Less)
+    }
+}
+
+impl PartialOrd for InventoryItemCount {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        if self.count == other.count {
+            return Some(self.name.cmp(&other.name));
+        }
+        if self.count > other.count {
+            return Some(Ordering::Greater);
+        }
+        Some(Ordering::Less)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -194,7 +251,7 @@ mod tests {
             serialized,
             r#"{"monitor_resize":{"width":10,"height":20}}"#
         );
-        
+
         let inventory_Register = CCTweakedMonitorInputEvent::InventoryRegister {
             size: Size { width: 10, height: 20 },
             computer_id: 0,

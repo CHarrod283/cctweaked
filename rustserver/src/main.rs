@@ -159,27 +159,30 @@ async fn write_inventory_manager_rate_report_to_terminal(terminal: Arc<Mutex<Ter
     loop {
         timer.tick().await;
         let Some(report) = manager.get_report(computer_id, Duration::from_secs(5 * 60)).await else {
-            error!("Failed to get rate report for computer id {computer_id}");
+            // just havent received any reports yet
             continue;
         };
         let display = match report {
-            InventoryManagerReport::Input(r) => {
+            InventoryManagerReport::Input(mut r) => {
+                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 List::new(r.iter().map(|item| {
                     let text = Text::raw(format!("{}: {}", item.name, item.rate_per_second));
                     text
-                })).block(Block::bordered().title(format!("{} Input", common_name)))
+                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title(format!("{} Input", common_name)))
             }
-            InventoryManagerReport::Output(r)  => {
+            InventoryManagerReport::Output(mut r)  => {
+                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 List::new(r.iter().map(|item| {
                     let text = Text::raw(format!("{}: {}", item.name, item.rate_per_second));
                     text
-                })).block(Block::bordered().title(format!("{} Output", common_name)))
+                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title(format!("{} Output", common_name)))
             }
-            InventoryManagerReport::Storage(r) => {
+            InventoryManagerReport::Storage(mut r) => {
+                r.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 List::new(r.iter().map(|item| {
                     let text = Text::raw(format!("{}: {}", item.name, item.count));
                     text
-                })).block(Block::bordered().title("Storage"))
+                })).block(Block::bordered().border_set(CCTWEAKED_BORDER).title("Storage"))
             }
         };
         let mut guard = terminal.lock().await;
